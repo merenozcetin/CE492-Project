@@ -45,7 +45,7 @@ class SeaRouteCalculator:
     
     def __init__(self):
         self.ports = []
-        self.ship_types = []
+        self.ship_types = []  # Initialize empty list first
         self._load_ports()
         self._load_ship_types()
     
@@ -130,8 +130,12 @@ class SeaRouteCalculator:
     
     def _load_ship_types(self):
         """Load ship types from CSV file"""
-        self.ship_types = self._load_ship_types_data()
-        print(f"✅ Created {len(self.ship_types)} ship type objects")
+        try:
+            self.ship_types = self._load_ship_types_data()
+            print(f"✅ Created {len(self.ship_types)} ship type objects")
+        except Exception as e:
+            print(f"❌ Error loading ship types: {e}")
+            self.ship_types = []  # Ensure it's always a list
     
     def search_ports(self, query: str, limit: int = 10) -> List[Port]:
         """Search ports by name, country, or region"""
@@ -232,12 +236,7 @@ calculator = get_calculator()
 with st.sidebar:
     st.header("ℹ️ About")
     st.info(f"**{len(calculator.ports)} ports** loaded from database")
-    
-    # Check if ship types are loaded
-    if hasattr(calculator, 'ship_types') and calculator.ship_types:
-        st.info(f"**{len(calculator.ship_types)} ship types** loaded from database")
-    else:
-        st.warning("**0 ship types** loaded from database")
+    st.info(f"**{len(calculator.ship_types)} ship types** loaded from database")
     
     # Debug info
     if len(calculator.ports) == 0:
@@ -539,7 +538,7 @@ with tab4:
     # Ship type selection
     st.subheader("🚢 Ship Type Selection")
     
-    if hasattr(calculator, 'ship_types') and calculator.ship_types:
+    if calculator.ship_types:
         ship_options = [st.name for st in calculator.ship_types]
         ship_options = ["Select ship type..."] + ship_options
         
