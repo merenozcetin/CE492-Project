@@ -272,14 +272,54 @@ class SeaRouteCalculator:
 
 # Page configuration
 st.set_page_config(
-    page_title="SeaRoute Maritime Distance Calculator",
+    page_title="SeaRoute Maritime Calculator",
     page_icon="🌊",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Header
-st.title("🌊 SeaRoute Maritime Distance Calculator")
-st.markdown("Calculate maritime distances between ports worldwide using the Python SeaRoute wrapper")
+# Custom CSS for better styling
+st.markdown("""
+<style>
+    .main-header {
+        background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%);
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+    .main-header h1 {
+        color: white;
+        margin: 0;
+        font-size: 2.5rem;
+    }
+    .main-header p {
+        color: #e8f4fd;
+        margin: 0.5rem 0 0 0;
+        font-size: 1.1rem;
+    }
+    .metric-card {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 4px solid #2a5298;
+    }
+    .sidebar-info {
+        background: #e8f4fd;
+        padding: 1rem;
+        border-radius: 8px;
+        margin: 1rem 0;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Enhanced Header
+st.markdown("""
+<div class="main-header">
+    <h1>🌊 SeaRoute Maritime Calculator</h1>
+    <p>Calculate maritime distances and CO₂ emissions for ships worldwide</p>
+</div>
+""", unsafe_allow_html=True)
 
 # Initialize calculator
 def get_calculator():
@@ -288,13 +328,20 @@ def get_calculator():
 
 calculator = get_calculator()
 
-# Sidebar info
+# Enhanced Sidebar
 with st.sidebar:
-    st.header("ℹ️ About")
-    st.info(f"**{len(calculator.ports)} ports** loaded from database")
-    st.info(f"**{len(calculator.mrv_ships)} MRV ships** loaded from database")
+    st.markdown("""
+    <div class="sidebar-info">
+        <h3>📊 Database Status</h3>
+        <p><strong>{ports_count} ports</strong> loaded</p>
+        <p><strong>{ships_count} MRV ships</strong> loaded</p>
+    </div>
+    """.format(
+        ports_count=len(calculator.ports),
+        ships_count=len(calculator.mrv_ships)
+    ), unsafe_allow_html=True)
     
-    # Debug info
+    # Status indicators
     if len(calculator.ports) == 0:
         st.error("❌ No ports loaded!")
         st.write("**Debug Info:**")
@@ -312,193 +359,27 @@ with st.sidebar:
     else:
         st.success("✅ SeaRoute engine ready")
     
-    st.header("🔧 Requirements")
+    st.markdown("---")
+    
+    st.markdown("### 🔧 Features")
+    st.markdown("""
+    - **🌍 MRV Emissions**: Calculate CO₂ emissions for specific ships
+    - **🚢 Port-to-Port**: Calculate maritime distances
+    - **🇪🇺 EU-ETS**: EEA port identification
+    - **📊 Real-time**: Live calculations
+    """)
+    
+    st.markdown("### 📋 Requirements")
     st.markdown("""
     - Python 3.8+
     - Streamlit
     - searoute package
     """)
 
-# Main tabs
-tab1, tab2, tab3, tab4 = st.tabs(["🚢 Port-to-Port", "📍 Coordinates", "🔍 Port Search", "🌍 MRV Emissions"])
+# Main tabs - Simplified interface with MRV Emissions first
+tab1, tab2 = st.tabs(["🌍 MRV Emissions", "🚢 Port-to-Port"])
 
 with tab1:
-    st.header("Port-to-Port Distance Calculation")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Origin Port")
-        
-        # Origin port selection - direct dropdown with all ports
-        origin_options = [f"{p.name} ({p.country})" for p in calculator.ports]
-        origin_options = ["Select origin port..."] + origin_options
-        
-        origin_choice = st.selectbox("Choose origin port:", origin_options, key="origin_select")
-        
-        if origin_choice and origin_choice != "Select origin port...":
-            for port in calculator.ports:
-                if f"{port.name} ({port.country})" == origin_choice:
-                    origin_port = port
-                    break
-            else:
-                origin_port = None
-        else:
-            origin_port = None
-        
-        if origin_port:
-            st.success(f"✅ **{origin_port.name}** ({origin_port.country})")
-            st.info(f"📍 Coordinates: {origin_port.lat:.2f}°N, {origin_port.lon:.2f}°E")
-    
-    with col2:
-        st.subheader("Destination Port")
-        
-        # Destination port selection - direct dropdown with all ports
-        dest_options = [f"{p.name} ({p.country})" for p in calculator.ports]
-        dest_options = ["Select destination port..."] + dest_options
-        
-        dest_choice = st.selectbox("Choose destination port:", dest_options, key="dest_select")
-        
-        if dest_choice and dest_choice != "Select destination port...":
-            for port in calculator.ports:
-                if f"{port.name} ({port.country})" == dest_choice:
-                    dest_port = port
-                    break
-            else:
-                dest_port = None
-        else:
-            dest_port = None
-        
-        if dest_port:
-            st.success(f"✅ **{dest_port.name}** ({dest_port.country})")
-            st.info(f"📍 Coordinates: {dest_port.lat:.2f}°N, {dest_port.lon:.2f}°E")
-    
-    # Calculate distance button
-    if st.button("🌊 Calculate Distance", type="primary"):
-        if origin_port and dest_port:
-            with st.spinner("Calculating maritime distance..."):
-                distance_result = calculator.calculate_distance(
-                    origin_port.lon, origin_port.lat, 
-                    dest_port.lon, dest_port.lat
-                )
-                
-                if distance_result['success']:
-                    st.success("✅ Distance Calculation Complete!")
-                    
-                    # Display results
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        st.metric(
-                            label="Distance (Nautical Miles)",
-                            value=f"{distance_result['distance_nm']} nm"
-                        )
-                    
-                    with col2:
-                        st.metric(
-                            label="Distance (Kilometers)", 
-                            value=f"{distance_result['distance_km']} km"
-                        )
-                    
-                    with col3:
-                        st.metric(
-                            label="Route Type",
-                            value=distance_result['route_name']
-                        )
-                    
-                    # Additional info
-                    st.subheader("📍 Route Details")
-                    st.write(f"**From:** {origin_port.name} ({origin_port.country})")
-                    st.write(f"**To:** {dest_port.name} ({dest_port.country})")
-                    st.write(f"**Distance:** {distance_result['distance_nm']} nautical miles ({distance_result['distance_km']} km)")
-                    
-                else:
-                    st.error(f"❌ Calculation failed: {distance_result['error']}")
-        else:
-            st.warning("Please select both origin and destination ports")
-
-with tab2:
-    st.header("Coordinate-Based Distance Calculation")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Origin Coordinates")
-        origin_lon = st.number_input("Origin Longitude:", value=0.0, format="%.2f", key="origin_lon")
-        origin_lat = st.number_input("Origin Latitude:", value=0.0, format="%.2f", key="origin_lat")
-    
-    with col2:
-        st.subheader("Destination Coordinates")
-        dest_lon = st.number_input("Destination Longitude:", value=0.0, format="%.2f", key="dest_lon")
-        dest_lat = st.number_input("Destination Latitude:", value=0.0, format="%.2f", key="dest_lat")
-    
-    # Calculate distance button
-    if st.button("🌊 Calculate Distance", type="primary", key="coord_calc"):
-        with st.spinner("Calculating maritime distance..."):
-            distance_result = calculator.calculate_distance(origin_lon, origin_lat, dest_lon, dest_lat)
-            
-            if distance_result['success']:
-                st.success("✅ Distance Calculation Complete!")
-                
-                # Display results
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    st.metric(
-                        label="Distance (Nautical Miles)",
-                        value=f"{distance_result['distance_nm']} nm"
-                    )
-                
-                with col2:
-                    st.metric(
-                        label="Distance (Kilometers)", 
-                        value=f"{distance_result['distance_km']} km"
-                    )
-                
-                with col3:
-                    st.metric(
-                        label="Route Type",
-                        value=distance_result['route_name']
-                    )
-                
-                # Additional info
-                st.subheader("📍 Route Details")
-                st.write(f"**From:** {origin_lat:.2f}°N, {origin_lon:.2f}°E")
-                st.write(f"**To:** {dest_lat:.2f}°N, {dest_lon:.2f}°E")
-                st.write(f"**Distance:** {distance_result['distance_nm']} nautical miles ({distance_result['distance_km']} km)")
-                
-            else:
-                st.error(f"❌ Calculation failed: {distance_result['error']}")
-
-with tab3:
-    st.header("Port Search")
-    
-    search_query = st.text_input("Search for ports:", placeholder="e.g., hamburg, singapore, rotterdam")
-    
-    if search_query and len(search_query) >= 2:
-        search_results = calculator.search_ports(search_query, 20)
-        
-        if search_results:
-            st.subheader(f"Found {len(search_results)} ports matching '{search_query}'")
-            
-            # Display results in a nice format
-            port_data = []
-            for port in search_results:
-                port_data.append({
-                    'Name': port.name,
-                    'Country': port.country,
-                    'Region': port.region,
-                    'Latitude': f"{port.lat:.2f}°N",
-                    'Longitude': f"{port.lon:.2f}°E",
-                    'Alternate': port.alternate or '-',
-                    'EEA': '🇪🇺 Yes' if port.is_eea else '🌍 No'
-                })
-            
-            st.dataframe(port_data, use_container_width=True)
-        else:
-            st.warning(f"No ports found matching '{search_query}'")
-
-with tab4:
     st.header("🌍 MRV Emissions Calculator")
     st.markdown("Calculate CO₂ emissions for specific ships using IMO numbers and MRV data")
     
@@ -638,6 +519,102 @@ with tab4:
                 st.error(f"❌ Calculation failed: {e}")
         else:
             st.warning("Please enter IMO number and select both origin and destination ports")
+
+with tab2:
+    st.header("🚢 Port-to-Port Distance Calculation")
+    st.markdown("Calculate maritime distances between ports worldwide")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Origin Port")
+        
+        # Origin port selection - direct dropdown with all ports
+        origin_options = [f"{p.name} ({p.country})" for p in calculator.ports]
+        origin_options = ["Select origin port..."] + origin_options
+        
+        origin_choice = st.selectbox("Choose origin port:", origin_options, key="origin_select")
+        
+        if origin_choice and origin_choice != "Select origin port...":
+            for port in calculator.ports:
+                if f"{port.name} ({port.country})" == origin_choice:
+                    origin_port = port
+                    break
+            else:
+                origin_port = None
+        else:
+            origin_port = None
+        
+        if origin_port:
+            st.success(f"✅ **{origin_port.name}** ({origin_port.country})")
+            st.info(f"📍 Coordinates: {origin_port.lat:.2f}°N, {origin_port.lon:.2f}°E")
+    
+    with col2:
+        st.subheader("Destination Port")
+        
+        # Destination port selection - direct dropdown with all ports
+        dest_options = [f"{p.name} ({p.country})" for p in calculator.ports]
+        dest_options = ["Select destination port..."] + dest_options
+        
+        dest_choice = st.selectbox("Choose destination port:", dest_options, key="dest_select")
+        
+        if dest_choice and dest_choice != "Select destination port...":
+            for port in calculator.ports:
+                if f"{port.name} ({port.country})" == dest_choice:
+                    dest_port = port
+                    break
+            else:
+                dest_port = None
+        else:
+            dest_port = None
+        
+        if dest_port:
+            st.success(f"✅ **{dest_port.name}** ({dest_port.country})")
+            st.info(f"📍 Coordinates: {dest_port.lat:.2f}°N, {dest_port.lon:.2f}°E")
+    
+    # Calculate distance button
+    if st.button("🌊 Calculate Distance", type="primary"):
+        if origin_port and dest_port:
+            with st.spinner("Calculating maritime distance..."):
+                distance_result = calculator.calculate_distance(
+                    origin_port.lon, origin_port.lat, 
+                    dest_port.lon, dest_port.lat
+                )
+                
+                if distance_result['success']:
+                    st.success("✅ Distance Calculation Complete!")
+                    
+                    # Display results
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.metric(
+                            label="Distance (Nautical Miles)",
+                            value=f"{distance_result['distance_nm']} nm"
+                        )
+                    
+                    with col2:
+                        st.metric(
+                            label="Distance (Kilometers)", 
+                            value=f"{distance_result['distance_km']} km"
+                        )
+                    
+                    with col3:
+                        st.metric(
+                            label="Route Type",
+                            value=distance_result['route_name']
+                        )
+                    
+                    # Additional info
+                    st.subheader("📍 Route Details")
+                    st.write(f"**From:** {origin_port.name} ({origin_port.country})")
+                    st.write(f"**To:** {dest_port.name} ({dest_port.country})")
+                    st.write(f"**Distance:** {distance_result['distance_nm']} nautical miles ({distance_result['distance_km']} km)")
+                    
+                else:
+                    st.error(f"❌ Calculation failed: {distance_result['error']}")
+        else:
+            st.warning("Please select both origin and destination ports")
 
 # Footer
 st.markdown("---")
