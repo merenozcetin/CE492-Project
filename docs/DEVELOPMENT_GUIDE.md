@@ -33,10 +33,6 @@
 
 4. **Run the application**
    ```bash
-   # Option 1: Use the run script
-   python run.py
-   
-   # Option 2: Direct Streamlit command
    streamlit run src/app.py
    ```
 
@@ -51,7 +47,6 @@ searoute-master/
 ├── docs/                          # Documentation
 │   ├── CODE_DOCUMENTATION.md     # Detailed code explanation
 │   └── CE492_Project_Description[1].md  # Project requirements
-├── run.py                         # Simple run script
 ├── requirements.txt               # Python dependencies
 ├── LICENSE                        # MIT License
 └── README.md                      # Main documentation
@@ -68,7 +63,7 @@ searoute-master/
 
 2. **Test your changes**
    ```bash
-   python run.py
+   streamlit run src/app.py
    ```
 
 3. **Commit your changes**
@@ -148,7 +143,7 @@ pip list | grep searoute
 
 ### Local Development
 ```bash
-python run.py
+streamlit run src/app.py
 ```
 
 ### Streamlit Cloud
