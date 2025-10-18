@@ -415,10 +415,11 @@ st.markdown("""
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
     .port-card {
-        background: white;
+        background: var(--background-color, white);
+        color: var(--text-color, black);
         padding: 1rem;
         border-radius: 8px;
-        border: 1px solid #e0e0e0;
+        border: 1px solid var(--border-color, #e0e0e0);
         margin: 0.5rem 0;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
         transition: all 0.3s ease;
@@ -460,13 +461,15 @@ st.markdown("""
         margin: 1rem 0;
     }
     .tab-container {
-        background: white;
+        background: var(--background-color, white);
+        color: var(--text-color, black);
         border-radius: 8px;
         padding: 1rem;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
     .stSelectbox > div > div {
-        background-color: white;
+        background-color: var(--background-color, white);
+        color: var(--text-color, black);
         border-radius: 8px;
     }
     .stButton > button {
@@ -483,7 +486,8 @@ st.markdown("""
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     }
     .metric-container {
-        background: white;
+        background: var(--background-color, white);
+        color: var(--text-color, black);
         padding: 1rem;
         border-radius: 8px;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
@@ -621,24 +625,14 @@ with tab1:
     with col2:
         st.subheader("📍 Route Information")
         
-        # Interactive port search
+        # Origin port selection - back to original dropdown
         st.write("**Origin Port**")
-        origin_search = st.text_input("Search origin port:", placeholder="Type to search...", key="origin_search")
-        
-        if origin_search and len(origin_search) >= 2:
-            origin_matches = calculator.search_ports(origin_search, 10)
-            if origin_matches:
-                origin_options = [f"{p.name} ({p.country})" for p in origin_matches]
-                origin_options = ["Select origin port..."] + origin_options
-            else:
-                origin_options = ["No ports found"]
-        else:
-            origin_options = [f"{p.name} ({p.country})" for p in calculator.ports[:50]]  # Limit for performance
-            origin_options = ["Select origin port..."] + origin_options
+        origin_options = [f"{p.name} ({p.country})" for p in calculator.ports]
+        origin_options = ["Select origin port..."] + origin_options
         
         origin_choice = st.selectbox("Choose origin port:", origin_options, key="mrv_origin_select")
         
-        if origin_choice and origin_choice != "Select origin port..." and origin_choice != "No ports found":
+        if origin_choice and origin_choice != "Select origin port...":
             for port in calculator.ports:
                 if f"{port.name} ({port.country})" == origin_choice:
                     mrv_origin_port = port
@@ -655,24 +649,14 @@ with tab1:
             st.write(f"🇪🇺 EEA Status: {'Yes' if mrv_origin_port.is_eea else 'No'}")
             st.markdown('</div>', unsafe_allow_html=True)
         
-        # Destination port selection
+        # Destination port selection - back to original dropdown
         st.write("**Destination Port**")
-        dest_search = st.text_input("Search destination port:", placeholder="Type to search...", key="dest_search")
-        
-        if dest_search and len(dest_search) >= 2:
-            dest_matches = calculator.search_ports(dest_search, 10)
-            if dest_matches:
-                dest_options = [f"{p.name} ({p.country})" for p in dest_matches]
-                dest_options = ["Select destination port..."] + dest_options
-            else:
-                dest_options = ["No ports found"]
-        else:
-            dest_options = [f"{p.name} ({p.country})" for p in calculator.ports[:50]]  # Limit for performance
-            dest_options = ["Select destination port..."] + dest_options
+        dest_options = [f"{p.name} ({p.country})" for p in calculator.ports]
+        dest_options = ["Select destination port..."] + dest_options
         
         dest_choice = st.selectbox("Choose destination port:", dest_options, key="mrv_dest_select")
         
-        if dest_choice and dest_choice != "Select destination port..." and dest_choice != "No ports found":
+        if dest_choice and dest_choice != "Select destination port...":
             for port in calculator.ports:
                 if f"{port.name} ({port.country})" == dest_choice:
                     mrv_dest_port = port
@@ -900,23 +884,13 @@ with tab2:
     with col1:
         st.subheader("📍 Origin Port")
         
-        # Interactive origin port search
-        origin_search = st.text_input("Search origin port:", placeholder="Type to search...", key="port_origin_search")
-        
-        if origin_search and len(origin_search) >= 2:
-            origin_matches = calculator.search_ports(origin_search, 10)
-            if origin_matches:
-                origin_options = [f"{p.name} ({p.country})" for p in origin_matches]
-                origin_options = ["Select origin port..."] + origin_options
-            else:
-                origin_options = ["No ports found"]
-        else:
-            origin_options = [f"{p.name} ({p.country})" for p in calculator.ports[:50]]  # Limit for performance
-            origin_options = ["Select origin port..."] + origin_options
+        # Origin port selection - back to original dropdown
+        origin_options = [f"{p.name} ({p.country})" for p in calculator.ports]
+        origin_options = ["Select origin port..."] + origin_options
         
         origin_choice = st.selectbox("Choose origin port:", origin_options, key="origin_select")
         
-        if origin_choice and origin_choice != "Select origin port..." and origin_choice != "No ports found":
+        if origin_choice and origin_choice != "Select origin port...":
             for port in calculator.ports:
                 if f"{port.name} ({port.country})" == origin_choice:
                     origin_port = port
@@ -936,23 +910,13 @@ with tab2:
     with col2:
         st.subheader("📍 Destination Port")
         
-        # Interactive destination port search
-        dest_search = st.text_input("Search destination port:", placeholder="Type to search...", key="port_dest_search")
-        
-        if dest_search and len(dest_search) >= 2:
-            dest_matches = calculator.search_ports(dest_search, 10)
-            if dest_matches:
-                dest_options = [f"{p.name} ({p.country})" for p in dest_matches]
-                dest_options = ["Select destination port..."] + dest_options
-            else:
-                dest_options = ["No ports found"]
-        else:
-            dest_options = [f"{p.name} ({p.country})" for p in calculator.ports[:50]]  # Limit for performance
-            dest_options = ["Select destination port..."] + dest_options
+        # Destination port selection - back to original dropdown
+        dest_options = [f"{p.name} ({p.country})" for p in calculator.ports]
+        dest_options = ["Select destination port..."] + dest_options
         
         dest_choice = st.selectbox("Choose destination port:", dest_options, key="dest_select")
         
-        if dest_choice and dest_choice != "Select destination port..." and dest_choice != "No ports found":
+        if dest_choice and dest_choice != "Select destination port...":
             for port in calculator.ports:
                 if f"{port.name} ({port.country})" == dest_choice:
                     dest_port = port
