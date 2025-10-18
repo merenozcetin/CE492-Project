@@ -47,19 +47,50 @@ class SeaRouteCalculator:
     
     def __init__(self):
         self.ports = []
-        self.searoute_jar_path = None
+        self.searoute_jar_path = self._find_searoute_jar()
         self.java_path = None
         self._load_ports()
         self._setup_searoute()
+    
+    def _find_searoute_jar(self) -> str:
+        """Find SeaRoute JAR file in multiple possible locations"""
+        possible_paths = [
+            'searoute-engine/searoute.jar',
+            'searoute.jar',
+            '../searoute-engine/searoute.jar',
+            './searoute-engine/searoute.jar',
+            'modules/jar/release/searoute/searoute.jar'
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path):
+                return path
+        
+        return 'searoute-engine/searoute.jar'  # Default fallback
+    
+    def _find_port_data(self) -> str:
+        """Find port data HTML file in multiple possible locations"""
+        possible_paths = [
+            'web-interface/port_calculator.html',
+            'port_calculator.html',
+            '../web-interface/port_calculator.html',
+            './web-interface/port_calculator.html'
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path):
+                return path
+        
+        return 'web-interface/port_calculator.html'  # Default fallback
     
     def _load_ports(self):
         """Load port database from the web interface HTML file"""
         print("🌊 Loading port database...")
         
         # Read ports from the HTML file
-        html_file = 'web-interface/port_calculator.html'
+        html_file = self._find_port_data()
         if not os.path.exists(html_file):
-            print("❌ Port database not found. Please ensure web-interface/port_calculator.html exists.")
+            print(f"❌ Port database not found: {html_file}")
             return
         
         with open(html_file, 'r', encoding='utf-8') as f:

@@ -48,10 +48,22 @@ class SeaRouteCalculator:
     
     def _load_ports(self):
         """Load port database from the web interface HTML file"""
-        # Read ports from the HTML file
-        html_file = 'web-interface/port_calculator.html'
-        if not os.path.exists(html_file):
-            st.error("❌ Port database not found. Please ensure web-interface/port_calculator.html exists.")
+        # Try multiple possible locations for the HTML file
+        possible_paths = [
+            'web-interface/port_calculator.html',
+            'port_calculator.html',
+            '../web-interface/port_calculator.html',
+            './web-interface/port_calculator.html'
+        ]
+        
+        html_file = None
+        for path in possible_paths:
+            if os.path.exists(path):
+                html_file = path
+                break
+        
+        if not html_file:
+            st.error("❌ Port database not found. Please ensure port_calculator.html exists.")
             return
         
         with open(html_file, 'r', encoding='utf-8') as f:
@@ -125,13 +137,26 @@ class SeaRouteCalculator:
     
     def _setup_searoute(self):
         """Setup SeaRoute Java engine"""
-        # Find SeaRoute JAR
-        searoute_jar = 'searoute-engine/searoute.jar'
-        if os.path.exists(searoute_jar):
-            self.searoute_jar_path = searoute_jar
-        else:
-            st.error("❌ SeaRoute JAR not found. Please ensure searoute-engine/searoute.jar exists.")
+        # Try multiple possible locations for the SeaRoute JAR
+        possible_jar_paths = [
+            'searoute-engine/searoute.jar',
+            'searoute.jar',
+            '../searoute-engine/searoute.jar',
+            './searoute-engine/searoute.jar',
+            'modules/jar/release/searoute/searoute.jar'
+        ]
+        
+        searoute_jar = None
+        for path in possible_jar_paths:
+            if os.path.exists(path):
+                searoute_jar = path
+                break
+        
+        if not searoute_jar:
+            st.error("❌ SeaRoute JAR not found. Please ensure searoute.jar exists.")
             return
+        
+        self.searoute_jar_path = searoute_jar
         
         # Find Java
         java_paths = [
@@ -203,7 +228,7 @@ class SeaRouteCalculator:
             
             # Change to searoute directory
             original_cwd = os.getcwd()
-            searoute_dir = 'searoute-engine'
+            searoute_dir = os.path.dirname(self.searoute_jar_path)
             
             if not os.path.exists(searoute_dir):
                 raise Exception(f"SeaRoute directory not found: {searoute_dir}")
@@ -212,7 +237,8 @@ class SeaRouteCalculator:
             
             try:
                 # Run SeaRoute
-                cmd = [self.java_path, '-jar', 'searoute.jar', temp_csv]
+                jar_name = os.path.basename(self.searoute_jar_path)
+                cmd = [self.java_path, '-jar', jar_name, temp_csv]
                 
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
                 
@@ -264,9 +290,12 @@ class SeaRouteCalculator:
                         os.remove(temp_file)
                     except:
                         pass
-                if os.path.exists(f'searoute-engine/{temp_file}'):
+                # Also clean up in searoute directory
+                searoute_dir = os.path.dirname(self.searoute_jar_path)
+                searoute_temp = os.path.join(searoute_dir, temp_file)
+                if os.path.exists(searoute_temp):
                     try:
-                        os.remove(f'searoute-engine/{temp_file}')
+                        os.remove(searoute_temp)
                     except:
                         pass
 
