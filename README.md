@@ -1,6 +1,6 @@
 # 🌊 SeaRoute Maritime Distance Calculator
 
-A clean, modern web application for calculating maritime distances between ports worldwide using the Python SeaRoute wrapper.
+A clean, modern Streamlit web application for calculating maritime distances between ports worldwide using the Python SeaRoute wrapper.
 
 ## ✨ Features
 
@@ -8,7 +8,7 @@ A clean, modern web application for calculating maritime distances between ports
 - **📍 Coordinate Calculation** - Direct latitude/longitude input
 - **🔍 Port Search** - Browse 2,948+ ports worldwide
 - **📊 Distance Results** - Display in both kilometers and nautical miles
-- **🎨 Modern UI** - Clean, responsive web interface
+- **🎨 Modern UI** - Clean, responsive Streamlit interface
 - **⚡ Fast** - Python-based, no Java dependencies
 
 ## 🚀 Quick Start
@@ -30,26 +30,24 @@ A clean, modern web application for calculating maritime distances between ports
    pip install -r requirements.txt
    ```
 
-3. **Run the application**
+3. **Run the Streamlit application**
    ```bash
-   python app.py
+   streamlit run app.py
    ```
 
 4. **Open your browser**
    ```
-   http://localhost:5000
+   http://localhost:8501
    ```
 
 ## 📁 Project Structure
 
 ```
 searoute-master/
-├── app.py                 # Main Flask application
+├── app.py                 # Main Streamlit application
 ├── requirements.txt        # Python dependencies
 ├── data/
 │   └── ports.json        # Port database (2,948 ports)
-├── templates/
-│   └── index.html        # Web interface
 └── README.md             # This file
 ```
 
@@ -74,37 +72,30 @@ searoute-master/
 2. Enter search terms (name, country, region)
 3. Browse the results
 
-## 🔧 API Endpoints
-
-- `GET /` - Main web interface
-- `GET /api/search?q=<query>&limit=<number>` - Search ports
-- `POST /api/calculate` - Calculate distance
-- `GET /api/status` - System status
-
 ## 📦 Dependencies
 
-- **Flask** - Web framework
+- **Streamlit** - Web framework
 - **searoute** - Python SeaRoute wrapper for maritime routing
 
 ## 🚀 Deployment
 
 ### Local Development
 ```bash
-python app.py
+streamlit run app.py
 ```
 
-### Production (with gunicorn)
-```bash
-pip install gunicorn
-gunicorn -w 4 -b 0.0.0.0:5000 app:app
-```
+### Streamlit Cloud
+1. Push your code to GitHub
+2. Go to [share.streamlit.io](https://share.streamlit.io)
+3. Connect your GitHub repository
+4. Set main file to `app.py`
+5. Deploy!
 
-### Cloud Deployment
+### Other Cloud Platforms
 The app is ready for deployment on:
-- **Heroku** - Add `Procfile` with `web: gunicorn app:app`
+- **Heroku** - Add `Procfile` with `web: streamlit run app.py --server.port=$PORT --server.address=0.0.0.0`
 - **Railway** - Automatic detection
 - **DigitalOcean** - App Platform
-- **AWS** - Elastic Beanstalk
 
 ## 🎯 EU-ETS Extension
 

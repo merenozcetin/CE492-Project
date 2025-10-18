@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-SeaRoute Maritime Distance Calculator
-Clean Flask web application for calculating maritime distances between ports worldwide.
+SeaRoute Maritime Distance Calculator - Streamlit App
+Clean web application for calculating maritime distances between ports worldwide.
 Uses the lightweight Python SeaRoute wrapper.
 
 Usage:
-    python app.py
+    streamlit run app.py
 """
 
-from flask import Flask, render_template, request, jsonify
+import streamlit as st
 import searoute as sr
 import json
 import os
@@ -32,12 +32,13 @@ class SeaRouteCalculator:
         self.ports = []
         self._load_ports()
     
-    def _load_ports(self):
+    @st.cache_data
+    def _load_ports(_self):
         """Load port database from ports.json"""
         ports_file = 'data/ports.json'
         
         if not os.path.exists(ports_file):
-            print(f"❌ Port data not found: {ports_file}")
+            st.error(f"❌ Port data not found: {ports_file}")
             return
         
         try:
@@ -53,12 +54,12 @@ class SeaRouteCalculator:
                     lat=port_data['lat'],
                     alternate=port_data.get('alternate')
                 )
-                self.ports.append(port)
+                _self.ports.append(port)
             
-            print(f"✅ Loaded {len(self.ports)} ports")
+            st.success(f"✅ Loaded {len(_self.ports)} ports")
             
         except Exception as e:
-            print(f"❌ Error loading ports: {e}")
+            st.error(f"❌ Error loading ports: {e}")
     
     def search_ports(self, query: str, limit: int = 10) -> List[Port]:
         """Search ports by name, country, or region"""
@@ -74,7 +75,8 @@ class SeaRouteCalculator:
         
         return matches[:limit]
     
-    def calculate_distance(self, origin_lon: float, origin_lat: float, 
+    @st.cache_data(ttl=3600)  # Cache for 1 hour
+    def calculate_distance(_self, origin_lon: float, origin_lat: float, 
                           dest_lon: float, dest_lat: float) -> Dict:
         """Calculate maritime distance using Python SeaRoute wrapper"""
         
@@ -109,75 +111,191 @@ class SeaRouteCalculator:
                 'error': f"SeaRoute calculation failed: {str(e)}"
             }
 
-# Initialize Flask app
-app = Flask(__name__)
+# Page configuration
+st.set_page_config(
+    page_title="SeaRoute Maritime Distance Calculator",
+    page_icon="🌊",
+    layout="wide"
+)
+
+# Header
+st.title("🌊 SeaRoute Maritime Distance Calculator")
+st.markdown("Calculate maritime distances between ports worldwide using the Python SeaRoute wrapper")
 
 # Initialize calculator
-calculator = SeaRouteCalculator()
+if 'calculator' not in st.session_state:
+    st.session_state.calculator = SeaRouteCalculator()
 
-@app.route('/')
-def index():
-    """Main page"""
-    return render_template('index.html', port_count=len(calculator.ports))
+calculator = st.session_state.calculator
 
-@app.route('/api/search')
-def search_ports():
-    """API endpoint for port search"""
-    query = request.args.get('q', '')
-    limit = int(request.args.get('limit', 10))
+# Sidebar info
+with st.sidebar:
+    st.header("ℹ️ About")
+    st.info(f"**{len(calculator.ports)} ports** loaded from database")
+    st.success("✅ SeaRoute engine ready")
     
-    if not query:
-        return jsonify([])
-    
-    ports = calculator.search_ports(query, limit)
-    
-    # Convert to JSON-serializable format
-    port_data = []
-    for port in ports:
-        port_data.append({
-            'name': port.name,
-            'country': port.country,
-            'region': port.region,
-            'lon': port.lon,
-            'lat': port.lat,
-            'alternate': port.alternate
-        })
-    
-    return jsonify(port_data)
+    st.header("🔧 Requirements")
+    st.markdown("""
+    - Python 3.8+
+    - Streamlit
+    - searoute package
+    """)
 
-@app.route('/api/calculate', methods=['POST'])
-def calculate_distance():
-    """API endpoint for distance calculation"""
-    try:
-        data = request.get_json()
+# Main tabs
+tab1, tab2, tab3 = st.tabs(["🚢 Port-to-Port", "📍 Coordinates", "🔍 Port Search"])
+
+with tab1:
+    st.header("Port-to-Port Distance Calculation")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Origin Port")
+        origin_query = st.text_input("Search origin port:", placeholder="e.g., hamburg, rotterdam", key="origin_search")
         
-        origin_lon = float(data['origin_lon'])
-        origin_lat = float(data['origin_lat'])
-        dest_lon = float(data['dest_lon'])
-        dest_lat = float(data['dest_lat'])
-        
-        result = calculator.calculate_distance(origin_lon, origin_lat, dest_lon, dest_lat)
-        
-        if result['success']:
-            return jsonify(result)
+        if origin_query:
+            origin_ports = calculator.search_ports(origin_query, 10)
+            if origin_ports:
+                origin_options = [f"{p.name} ({p.country})" for p in origin_ports]
+                origin_choice = st.selectbox("Select origin port:", origin_options, key="origin_select")
+                origin_port = origin_ports[origin_options.index(origin_choice)]
+            else:
+                st.warning("No ports found matching your search")
+                origin_port = None
         else:
-            return jsonify(result), 400
+            origin_port = None
+    
+    with col2:
+        st.subheader("Destination Port")
+        dest_query = st.text_input("Search destination port:", placeholder="e.g., shanghai, singapore", key="dest_search")
         
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': f"Invalid input: {str(e)}"
-        }), 400
+        if dest_query:
+            dest_ports = calculator.search_ports(dest_query, 10)
+            if dest_ports:
+                dest_options = [f"{p.name} ({p.country})" for p in dest_ports]
+                dest_choice = st.selectbox("Select destination port:", dest_options, key="dest_select")
+                dest_port = dest_ports[dest_options.index(dest_choice)]
+            else:
+                st.warning("No ports found matching your search")
+                dest_port = None
+        else:
+            dest_port = None
+    
+    # Calculate button
+    if st.button("🚀 Calculate Distance", type="primary"):
+        if origin_port and dest_port:
+            with st.spinner("Calculating maritime distance..."):
+                result = calculator.calculate_distance(
+                    origin_port.lon, origin_port.lat, 
+                    dest_port.lon, dest_port.lat
+                )
+                
+                if result['success']:
+                    st.success("✅ Calculation Complete!")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.metric(
+                            label="🌊 Maritime Distance",
+                            value=f"{result['distance_nm']} nm",
+                            help=f"{result['distance_km']} km"
+                        )
+                    
+                    with col2:
+                        st.metric(
+                            label="📍 Distance (km)",
+                            value=f"{result['distance_km']} km"
+                        )
+                    
+                    with col3:
+                        st.metric(
+                            label="📍 Distance (nm)",
+                            value=f"{result['distance_nm']} nm"
+                        )
+                    
+                    st.info(f"🏷️ Route Name: {result['route_name']}")
+                    
+                else:
+                    st.error(f"❌ Calculation failed: {result['error']}")
+        else:
+            st.warning("Please select both origin and destination ports")
 
-@app.route('/api/status')
-def status():
-    """API endpoint for system status"""
-    return jsonify({
-        'ports_loaded': len(calculator.ports),
-        'searoute_available': True,
-        'status': 'ready'
-    })
+with tab2:
+    st.header("Coordinate-based Distance Calculation")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Origin Coordinates")
+        origin_lon = st.number_input("Origin Longitude:", value=0.0, format="%.2f", key="origin_lon")
+        origin_lat = st.number_input("Origin Latitude:", value=0.0, format="%.2f", key="origin_lat")
+    
+    with col2:
+        st.subheader("Destination Coordinates")
+        dest_lon = st.number_input("Destination Longitude:", value=0.0, format="%.2f", key="dest_lon")
+        dest_lat = st.number_input("Destination Latitude:", value=0.0, format="%.2f", key="dest_lat")
+    
+    if st.button("🚀 Calculate Distance from Coordinates", type="primary"):
+        with st.spinner("Calculating maritime distance..."):
+            result = calculator.calculate_distance(origin_lon, origin_lat, dest_lon, dest_lat)
+            
+            if result['success']:
+                st.success("✅ Calculation Complete!")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric(
+                        label="🌊 Maritime Distance",
+                        value=f"{result['distance_nm']} nm",
+                        help=f"{result['distance_km']} km"
+                    )
+                
+                with col2:
+                    st.metric(
+                        label="📍 Distance (km)",
+                        value=f"{result['distance_km']} km"
+                    )
+                
+                with col3:
+                    st.metric(
+                        label="📍 Distance (nm)",
+                        value=f"{result['distance_nm']} nm"
+                    )
+                
+                st.info(f"🏷️ Route Name: {result['route_name']}")
+                
+            else:
+                st.error(f"❌ Calculation failed: {result['error']}")
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+with tab3:
+    st.header("Port Search")
+    
+    search_query = st.text_input("Search ports:", placeholder="Search by name, country, or region (e.g., hamburg, germany, container)")
+    
+    if search_query:
+        ports = calculator.search_ports(search_query, 20)
+        
+        if ports:
+            st.success(f"Found {len(ports)} ports matching '{search_query}'")
+            
+            # Display ports in a table
+            port_data = []
+            for port in ports:
+                port_data.append({
+                    "Name": port.name,
+                    "Country": port.country,
+                    "Region": port.region,
+                    "Longitude": f"{port.lon}°E",
+                    "Latitude": f"{port.lat}°N",
+                    "Alternate": port.alternate or ""
+                })
+            
+            st.dataframe(port_data, use_container_width=True)
+        else:
+            st.warning(f"No ports found matching '{search_query}'")
+
+# Footer
+st.markdown("---")
+st.markdown("**SeaRoute Maritime Distance Calculator** - Powered by Python SeaRoute wrapper")
