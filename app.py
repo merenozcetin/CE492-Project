@@ -33,7 +33,7 @@ class SeaRouteCalculator:
         self._load_ports()
     
     @st.cache_data(ttl=3600)  # Cache for 1 hour
-    def _load_ports_data(_self):
+    def _load_ports_data():
         """Load port data from JSON file with caching"""
         # Try multiple possible locations for the ports file
         possible_paths = [
@@ -78,9 +78,14 @@ class SeaRouteCalculator:
                 alternate=port_data.get('alternate')
             )
             self.ports.append(port)
+        
+        print(f"✅ Created {len(self.ports)} port objects")
     
     def search_ports(self, query: str, limit: int = 10) -> List[Port]:
         """Search ports by name, country, or region"""
+        if not query or len(query) < 2:
+            return []
+            
         query = query.lower()
         matches = []
         
@@ -183,14 +188,15 @@ with tab1:
         st.subheader("Origin Port")
         origin_query = st.text_input("Search origin port:", placeholder="e.g., hamburg, rotterdam", key="origin_search")
         
-        if origin_query:
+        if origin_query and len(origin_query) >= 2:
             origin_ports = calculator.search_ports(origin_query, 10)
             if origin_ports:
                 origin_options = [f"{p.name} ({p.country})" for p in origin_ports]
                 origin_choice = st.selectbox("Select origin port:", origin_options, key="origin_select")
                 origin_port = origin_ports[origin_options.index(origin_choice)]
             else:
-                st.warning("No ports found matching your search")
+                st.warning(f"No ports found matching '{origin_query}'")
+                st.write(f"Debug: Searched in {len(calculator.ports)} ports")
                 origin_port = None
         else:
             origin_port = None
@@ -199,14 +205,15 @@ with tab1:
         st.subheader("Destination Port")
         dest_query = st.text_input("Search destination port:", placeholder="e.g., shanghai, singapore", key="dest_search")
         
-        if dest_query:
+        if dest_query and len(dest_query) >= 2:
             dest_ports = calculator.search_ports(dest_query, 10)
             if dest_ports:
                 dest_options = [f"{p.name} ({p.country})" for p in dest_ports]
                 dest_choice = st.selectbox("Select destination port:", dest_options, key="dest_select")
                 dest_port = dest_ports[dest_options.index(dest_choice)]
             else:
-                st.warning("No ports found matching your search")
+                st.warning(f"No ports found matching '{dest_query}'")
+                st.write(f"Debug: Searched in {len(calculator.ports)} ports")
                 dest_port = None
         else:
             dest_port = None
