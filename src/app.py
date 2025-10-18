@@ -107,26 +107,43 @@ class SeaRouteCalculator:
             
             with open(mrv_file_path, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
+                
+                # Debug: Print column names
+                print(f"📋 CSV Columns: {list(reader.fieldnames)}")
+                
+                # Test first few rows
+                first_row = next(reader, None)
+                if first_row:
+                    print(f"🔍 First row sample: {first_row}")
+                    # Reset file pointer to beginning
+                    f.seek(0)
+                    reader = csv.DictReader(f)
                 for row in reader:
                     total_rows += 1
                     
-                    # Skip rows with "Division by zero!" errors
-                    if row['CO₂ emissions per distance [kg CO₂ / n mile]'] == 'Division by zero!':
-                        skipped_rows += 1
-                        continue
-                    
                     try:
+                        # Handle "Division by zero!" by setting to 0
+                        co2_value = row['CO₂ emissions per distance [kg CO₂ / n mile]']
+                        co2eq_value = row['CO₂eq emissions per distance [kg CO₂eq / n mile]']
+                        
+                        if co2_value == 'Division by zero!':
+                            co2_value = '0'
+                        if co2eq_value == 'Division by zero!':
+                            co2eq_value = '0'
+                        
                         ship = MRVShip(
                             imo_number=row['IMO Number'],
-                            co2_per_nm=float(row['CO₂ emissions per distance [kg CO₂ / n mile]']),
-                            co2eq_per_nm=float(row['CO₂eq emissions per distance [kg CO₂eq / n mile]'])
+                            co2_per_nm=float(co2_value),
+                            co2eq_per_nm=float(co2eq_value)
                         )
                         self.mrv_ships.append(ship)
                         loaded_ships += 1
-                    except ValueError as e:
+                        
+                    except (ValueError, KeyError) as e:
                         # Skip rows with invalid data
                         skipped_rows += 1
                         print(f"⚠️ Skipped row {total_rows}: {e}")
+                        print(f"   Row data: {row}")
                         continue
             
             print(f"📊 MRV Loading Summary:")
