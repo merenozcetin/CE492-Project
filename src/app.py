@@ -23,6 +23,12 @@ class MRVShip:
     co2eq_per_nm: float
 
 @dataclass
+class ETSPrices:
+    """ETS price data for different years"""
+    year: int
+    price_eur: float
+
+@dataclass
 class EmissionResult:
     """Emission calculation result"""
     imo_number: str
@@ -30,6 +36,7 @@ class EmissionResult:
     distance_nm: float
     co2_emissions: float
     co2eq_emissions: float
+    ets_costs: Dict[int, float] = None  # Year -> cost in EUR
 
 @dataclass
 class Port:
@@ -48,8 +55,10 @@ class SeaRouteCalculator:
     def __init__(self):
         self.ports = []
         self.mrv_ships = []
+        self.ets_prices = []
         self._load_ports()
         self._load_mrv_data()
+        self._load_ets_prices()
     
     def _load_ports(self):
         """Load port database from ports.json"""
@@ -154,6 +163,51 @@ class SeaRouteCalculator:
             
         except Exception as e:
             print(f"❌ Error loading MRV data: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _load_ets_prices(self):
+        """Load ETS price data from CSV file"""
+        try:
+            import csv
+            import os
+            
+            # Try multiple possible paths for the ETS price file
+            possible_paths = [
+                'data/ets_price.csv',
+                './data/ets_price.csv',
+                '../data/ets_price.csv',
+                os.path.join(os.path.dirname(__file__), '..', 'data', 'ets_price.csv'),
+                os.path.join(os.getcwd(), 'data', 'ets_price.csv')
+            ]
+            
+            ets_file_path = None
+            for path in possible_paths:
+                if os.path.exists(path):
+                    ets_file_path = path
+                    break
+            
+            if not ets_file_path:
+                print(f"❌ ETS price file not found. Tried paths: {possible_paths}")
+                return
+            
+            print(f"📁 Loading ETS prices from: {ets_file_path}")
+            
+            with open(ets_file_path, 'r', encoding='utf-8-sig') as f:
+                reader = csv.DictReader(f)
+                
+                for row in reader:
+                    if row['year'] and row['average_eua_price_eur']:  # Skip empty rows
+                        ets_price = ETSPrices(
+                            year=int(row['year']),
+                            price_eur=float(row['average_eua_price_eur'])
+                        )
+                        self.ets_prices.append(ets_price)
+            
+            print(f"✅ Loaded {len(self.ets_prices)} ETS price entries")
+            
+        except Exception as e:
+            print(f"❌ Error loading ETS prices: {e}")
             import traceback
             traceback.print_exc()
     
@@ -262,13 +316,59 @@ class SeaRouteCalculator:
         co2_emissions = distance_nm * ship.co2_per_nm
         co2eq_emissions = distance_nm * ship.co2eq_per_nm
         
+        # Calculate ETS costs
+        ets_costs = self._calculate_ets_costs(co2_emissions, co2eq_emissions, origin_port, dest_port)
+        
         return EmissionResult(
             imo_number=imo_number,
             ship_name=f"Ship IMO {imo_number}",
             distance_nm=distance_nm,
             co2_emissions=round(co2_emissions, 2),
-            co2eq_emissions=round(co2eq_emissions, 2)
+            co2eq_emissions=round(co2eq_emissions, 2),
+            ets_costs=ets_costs
         )
+    
+    def _calculate_ets_costs(self, co2_emissions: float, co2eq_emissions: float, 
+                             origin_port: Port, dest_port: Port) -> Dict[int, float]:
+        """Calculate ETS costs for different years based on EU-ETS rules"""
+        
+        # Determine EEA coverage multiplier
+        origin_eea = origin_port.is_eea
+        dest_eea = dest_port.is_eea
+        
+        if origin_eea and dest_eea:
+            coverage_multiplier = 1.0  # Both ports in EEA
+        elif origin_eea or dest_eea:
+            coverage_multiplier = 0.5  # Mixed route (one EEA, one non-EEA)
+        else:
+            coverage_multiplier = 0.0  # Both ports outside EEA
+        
+        ets_costs = {}
+        
+        for ets_price in self.ets_prices:
+            year = ets_price.year
+            price_eur = ets_price.price_eur
+            
+            # Phase-in percentages
+            if year == 2024:
+                phase_in = 0.4
+            elif year == 2025:
+                phase_in = 0.7
+            else:  # 2026 and onwards
+                phase_in = 1.0
+            
+            # Use CO2 for 2024-2025, CO2eq for 2026+
+            if year in [2024, 2025]:
+                emissions_for_cost = co2_emissions
+            else:
+                emissions_for_cost = co2eq_emissions
+            
+            # Calculate cost: emissions (kg) * price (EUR/tonne) * phase-in * coverage
+            # Convert kg to tonnes by dividing by 1000
+            cost_eur = (emissions_for_cost / 1000) * price_eur * phase_in * coverage_multiplier
+            ets_costs[year] = round(cost_eur, 2)
+        
+        return ets_costs
 
 # Page configuration
 st.set_page_config(
@@ -335,10 +435,12 @@ with st.sidebar:
         <h3>📊 Database Status</h3>
         <p><strong>{ports_count} ports</strong> loaded</p>
         <p><strong>{ships_count} MRV ships</strong> loaded</p>
+        <p><strong>{ets_count} ETS prices</strong> loaded</p>
     </div>
     """.format(
         ports_count=len(calculator.ports),
-        ships_count=len(calculator.mrv_ships)
+        ships_count=len(calculator.mrv_ships),
+        ets_count=len(calculator.ets_prices)
     ), unsafe_allow_html=True)
     
     # Status indicators
@@ -493,19 +595,61 @@ with tab1:
                             help="Maritime distance"
                         )
                     
-                    # EU-ETS Information
-                    st.subheader("🇪🇺 EU-ETS Information")
+                    # EU-ETS Cost Information
+                    st.subheader("🇪🇺 EU-ETS Cost Analysis")
                     
                     # Check if route involves EEA ports
                     origin_eea = mrv_origin_port.is_eea
                     dest_eea = mrv_dest_port.is_eea
                     
                     if origin_eea and dest_eea:
-                        st.info("**EEA-to-EEA Route**: This route is fully covered by EU-ETS")
+                        coverage_type = "**EEA-to-EEA Route**"
+                        coverage_desc = "This route is fully covered by EU-ETS (100%)"
+                        st.info(f"{coverage_type}: {coverage_desc}")
                     elif origin_eea or dest_eea:
-                        st.warning("**Mixed Route**: This route involves both EEA and non-EEA ports")
+                        coverage_type = "**Mixed Route**"
+                        coverage_desc = "This route involves both EEA and non-EEA ports (50%)"
+                        st.warning(f"{coverage_type}: {coverage_desc}")
                     else:
-                        st.info("**Non-EEA Route**: This route is not covered by EU-ETS")
+                        coverage_type = "**Non-EEA Route**"
+                        coverage_desc = "This route is not covered by EU-ETS (0%)"
+                        st.info(f"{coverage_type}: {coverage_desc}")
+                    
+                    # Display ETS costs by year
+                    if emission_result.ets_costs:
+                        st.subheader("💰 ETS Costs by Year")
+                        
+                        # Create columns for cost display
+                        cost_cols = st.columns(len(emission_result.ets_costs))
+                        
+                        for i, (year, cost) in enumerate(emission_result.ets_costs.items()):
+                            with cost_cols[i]:
+                                # Determine phase-in percentage and emission type
+                                if year == 2024:
+                                    phase_in = "40%"
+                                    emission_type = "CO₂"
+                                elif year == 2025:
+                                    phase_in = "70%"
+                                    emission_type = "CO₂"
+                                else:
+                                    phase_in = "100%"
+                                    emission_type = "CO₂eq"
+                                
+                                st.metric(
+                                    label=f"{year}",
+                                    value=f"€{cost:,.0f}",
+                                    help=f"Phase-in: {phase_in}, Based on: {emission_type}"
+                                )
+                        
+                        # Summary information
+                        st.markdown("---")
+                        st.markdown("""
+                        **EU-ETS Calculation Details:**
+                        - **2024-2025**: Based on CO₂ emissions
+                        - **2026+**: Based on CO₂eq emissions
+                        - **Phase-in**: 40% (2024), 70% (2025), 100% (2026+)
+                        - **Coverage**: EEA-EEA (100%), Mixed (50%), Non-EEA (0%)
+                        """)
                     
                     st.info("""
                     **EU-ETS Maritime Coverage:**
