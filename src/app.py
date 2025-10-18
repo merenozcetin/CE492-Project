@@ -105,7 +105,7 @@ class SeaRouteCalculator:
             skipped_rows = 0
             loaded_ships = 0
             
-            with open(mrv_file_path, 'r', encoding='utf-8') as f:
+            with open(mrv_file_path, 'r', encoding='utf-8-sig') as f:
                 reader = csv.DictReader(f)
                 
                 # Debug: Print column names
