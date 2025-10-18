@@ -186,56 +186,88 @@ with tab1:
     
     with col1:
         st.subheader("Origin Port")
+        
+        # Dynamic search with selectbox for true autocomplete
         origin_query = st.text_input("Search origin port:", placeholder="e.g., hamburg, rotterdam", key="origin_search")
         
-        # Show search results immediately as user types
         if origin_query and len(origin_query) >= 2:
-            origin_ports = calculator.search_ports(origin_query, 10)
+            origin_ports = calculator.search_ports(origin_query, 15)
             if origin_ports:
-                st.write(f"**Found {len(origin_ports)} ports:**")
-                for i, port in enumerate(origin_ports):
-                    if st.button(f"{port.name} ({port.country})", key=f"origin_btn_{i}"):
-                        st.session_state.origin_selected = port
-                        st.rerun()
+                # Create options list for selectbox
+                origin_options = [f"{p.name} ({p.country})" for p in origin_ports]
                 
-                # Show selected port
-                if 'origin_selected' in st.session_state:
-                    selected = st.session_state.origin_selected
-                    st.success(f"✅ Selected: {selected.name} ({selected.country})")
-                    origin_port = selected
+                # Add "Select a port..." as first option
+                origin_options = ["Select a port..."] + origin_options
+                
+                # Use selectbox for autocomplete-like behavior
+                origin_choice = st.selectbox(
+                    f"Found {len(origin_ports)} ports:", 
+                    origin_options, 
+                    key="origin_select"
+                )
+                
+                if origin_choice and origin_choice != "Select a port...":
+                    # Find the selected port
+                    selected_port = None
+                    for port in origin_ports:
+                        if f"{port.name} ({port.country})" == origin_choice:
+                            selected_port = port
+                            break
+                    
+                    if selected_port:
+                        st.success(f"✅ **Selected:** {selected_port.name} ({selected_port.country})")
+                        st.info(f"📍 Coordinates: {selected_port.lon}°E, {selected_port.lat}°N")
+                        origin_port = selected_port
+                    else:
+                        origin_port = None
                 else:
                     origin_port = None
             else:
-                st.warning(f"No ports found matching '{origin_query}'")
-                st.write(f"Debug: Searched in {len(calculator.ports)} ports")
+                st.warning(f"❌ No ports found matching '{origin_query}'")
                 origin_port = None
         else:
             origin_port = None
     
     with col2:
         st.subheader("Destination Port")
+        
+        # Dynamic search with selectbox for true autocomplete
         dest_query = st.text_input("Search destination port:", placeholder="e.g., shanghai, singapore", key="dest_search")
         
-        # Show search results immediately as user types
         if dest_query and len(dest_query) >= 2:
-            dest_ports = calculator.search_ports(dest_query, 10)
+            dest_ports = calculator.search_ports(dest_query, 15)
             if dest_ports:
-                st.write(f"**Found {len(dest_ports)} ports:**")
-                for i, port in enumerate(dest_ports):
-                    if st.button(f"{port.name} ({port.country})", key=f"dest_btn_{i}"):
-                        st.session_state.dest_selected = port
-                        st.rerun()
+                # Create options list for selectbox
+                dest_options = [f"{p.name} ({p.country})" for p in dest_ports]
                 
-                # Show selected port
-                if 'dest_selected' in st.session_state:
-                    selected = st.session_state.dest_selected
-                    st.success(f"✅ Selected: {selected.name} ({selected.country})")
-                    dest_port = selected
+                # Add "Select a port..." as first option
+                dest_options = ["Select a port..."] + dest_options
+                
+                # Use selectbox for autocomplete-like behavior
+                dest_choice = st.selectbox(
+                    f"Found {len(dest_ports)} ports:", 
+                    dest_options, 
+                    key="dest_select"
+                )
+                
+                if dest_choice and dest_choice != "Select a port...":
+                    # Find the selected port
+                    selected_port = None
+                    for port in dest_ports:
+                        if f"{port.name} ({port.country})" == dest_choice:
+                            selected_port = port
+                            break
+                    
+                    if selected_port:
+                        st.success(f"✅ **Selected:** {selected_port.name} ({selected_port.country})")
+                        st.info(f"📍 Coordinates: {selected_port.lon}°E, {selected_port.lat}°N")
+                        dest_port = selected_port
+                    else:
+                        dest_port = None
                 else:
                     dest_port = None
             else:
-                st.warning(f"No ports found matching '{dest_query}'")
-                st.write(f"Debug: Searched in {len(calculator.ports)} ports")
+                st.warning(f"❌ No ports found matching '{dest_query}'")
                 dest_port = None
         else:
             dest_port = None
