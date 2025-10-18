@@ -224,9 +224,8 @@ st.title("🌊 SeaRoute Maritime Distance Calculator")
 st.markdown("Calculate maritime distances between ports worldwide using the Python SeaRoute wrapper")
 
 # Initialize calculator
-@st.cache_resource
 def get_calculator():
-    """Get cached calculator instance"""
+    """Get calculator instance"""
     return SeaRouteCalculator()
 
 calculator = get_calculator()
