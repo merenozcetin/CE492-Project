@@ -24,6 +24,7 @@ class Port:
     lon: float
     lat: float
     alternate: Optional[str] = None
+    is_eea: bool = False
 
 class SeaRouteCalculator:
     """Main SeaRoute distance calculator using Python wrapper"""
@@ -45,7 +46,8 @@ class SeaRouteCalculator:
                     region=port_data['region'],
                     lon=port_data['lon'],
                     lat=port_data['lat'],
-                    alternate=port_data.get('alternate')
+                    alternate=port_data.get('alternate'),
+                    is_eea=port_data.get('is_eea', False)
                 )
                 self.ports.append(port)
             
@@ -343,7 +345,8 @@ with tab3:
                     'Region': port.region,
                     'Latitude': f"{port.lat:.2f}°N",
                     'Longitude': f"{port.lon:.2f}°E",
-                    'Alternate': port.alternate or '-'
+                    'Alternate': port.alternate or '-',
+                    'EEA': '🇪🇺 Yes' if port.is_eea else '🌍 No'
                 })
             
             st.dataframe(port_data, use_container_width=True)
