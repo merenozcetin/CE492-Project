@@ -101,11 +101,18 @@ class SeaRouteCalculator:
             
             print(f"📁 Loading MRV data from: {mrv_file_path}")
             
+            total_rows = 0
+            skipped_rows = 0
+            loaded_ships = 0
+            
             with open(mrv_file_path, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 for row in reader:
+                    total_rows += 1
+                    
                     # Skip rows with "Division by zero!" errors
                     if row['CO₂ emissions per distance [kg CO₂ / n mile]'] == 'Division by zero!':
+                        skipped_rows += 1
                         continue
                     
                     try:
@@ -115,14 +122,23 @@ class SeaRouteCalculator:
                             co2eq_per_nm=float(row['CO₂eq emissions per distance [kg CO₂eq / n mile]'])
                         )
                         self.mrv_ships.append(ship)
-                    except ValueError:
+                        loaded_ships += 1
+                    except ValueError as e:
                         # Skip rows with invalid data
+                        skipped_rows += 1
+                        print(f"⚠️ Skipped row {total_rows}: {e}")
                         continue
             
+            print(f"📊 MRV Loading Summary:")
+            print(f"   Total rows processed: {total_rows}")
+            print(f"   Ships loaded: {loaded_ships}")
+            print(f"   Rows skipped: {skipped_rows}")
             print(f"✅ Loaded {len(self.mrv_ships)} MRV ships")
             
         except Exception as e:
             print(f"❌ Error loading MRV data: {e}")
+            import traceback
+            traceback.print_exc()
     
     def search_ports(self, query: str, limit: int = 10) -> List[Port]:
         """Search ports by name, country, or region"""
