@@ -40,9 +40,8 @@ class Port:
     lat: float
     alternate: Optional[str] = None
 
-@st.cache_data(ttl=3600)  # Cache for 1 hour
 def load_ports_data():
-    """Load port data from JSON file with caching"""
+    """Load port data from JSON file"""
     # Try multiple possible locations for the ports file
     possible_paths = [
         'data/ports.json',
@@ -72,9 +71,8 @@ def load_ports_data():
         print(f"❌ Error loading ports: {e}")
         return []
 
-@st.cache_data(ttl=3600)  # Cache for 1 hour
 def load_ship_types_data():
-    """Load ship types data from CSV file with caching"""
+    """Load ship types data from CSV file"""
     ships_file = 'data/registeredships.csv'
     
     if not os.path.exists(ships_file):
