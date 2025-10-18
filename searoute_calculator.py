@@ -284,8 +284,8 @@ class SeaRouteCalculator:
                     except:
                         pass
 
-def interactive_mode():
-    """Interactive command-line interface"""
+def demo_mode():
+    """Demo mode showing example calculations"""
     calculator = SeaRouteCalculator()
     
     if not calculator.ports:
@@ -294,170 +294,67 @@ def interactive_mode():
     
     print("\n🌊 SeaRoute Maritime Distance Calculator")
     print("=" * 50)
-    print("Type 'help' for commands, 'quit' to exit")
+    print(f"✅ Loaded {len(calculator.ports)} ports")
+    print("✅ SeaRoute engine ready")
+    print("✅ Java runtime found")
+    print()
     
-    while True:
-        try:
-            command = input("\n> ").strip().lower()
-            
-            if command == 'quit' or command == 'exit':
-                print("👋 Goodbye!")
-                break
-            
-            elif command == 'help':
-                print("\n📋 Available commands:")
-                print("  search <query>     - Search for ports")
-                print("  calculate         - Calculate distance between two ports")
-                print("  coordinates       - Calculate distance using coordinates")
-                print("  list <country>    - List ports in a country")
-                print("  help              - Show this help")
-                print("  quit              - Exit the program")
-            
-            elif command.startswith('search '):
-                query = command[7:].strip()
-                if not query:
-                    print("❌ Please provide a search query")
-                    continue
-                
-                ports = calculator.search_ports(query, 10)
-                if ports:
-                    print(f"\n🔍 Found {len(ports)} ports matching '{query}':")
-                    for i, port in enumerate(ports, 1):
-                        alt_text = f" ({port.alternate})" if port.alternate else ""
-                        print(f"  {i:2d}. {port.name}{alt_text} - {port.country}")
-                        print(f"      Coordinates: {port.lon}°E, {port.lat}°N")
-                else:
-                    print(f"❌ No ports found matching '{query}'")
-            
-            elif command.startswith('list '):
-                country = command[5:].strip()
-                if not country:
-                    print("❌ Please provide a country name")
-                    continue
-                
-                ports = [p for p in calculator.ports if country.lower() in p.country.lower()]
-                if ports:
-                    print(f"\n🌍 Ports in {country}:")
-                    for i, port in enumerate(ports[:20], 1):  # Limit to 20
-                        alt_text = f" ({port.alternate})" if port.alternate else ""
-                        print(f"  {i:2d}. {port.name}{alt_text} - {port.lon}°E, {port.lat}°N")
-                    if len(ports) > 20:
-                        print(f"  ... and {len(ports) - 20} more ports")
-                else:
-                    print(f"❌ No ports found in {country}")
-            
-            elif command == 'calculate':
-                print("\n🚢 Port-to-Port Distance Calculation")
-                
-                # Get origin port
-                origin_query = input("Enter origin port (name or search query): ").strip()
-                if not origin_query:
-                    print("❌ Origin port required")
-                    continue
-                
-                origin_ports = calculator.search_ports(origin_query, 5)
-                if not origin_ports:
-                    print(f"❌ No ports found matching '{origin_query}'")
-                    continue
-                
-                if len(origin_ports) == 1:
-                    origin = origin_ports[0]
-                else:
-                    print(f"\n📍 Multiple ports found for '{origin_query}':")
-                    for i, port in enumerate(origin_ports, 1):
-                        alt_text = f" ({port.alternate})" if port.alternate else ""
-                        print(f"  {i}. {port.name}{alt_text} - {port.country}")
-                    
-                    try:
-                        choice = int(input("Select origin port (number): ")) - 1
-                        if 0 <= choice < len(origin_ports):
-                            origin = origin_ports[choice]
-                        else:
-                            print("❌ Invalid selection")
-                            continue
-                    except ValueError:
-                        print("❌ Please enter a valid number")
-                        continue
-                
-                # Get destination port
-                dest_query = input("Enter destination port (name or search query): ").strip()
-                if not dest_query:
-                    print("❌ Destination port required")
-                    continue
-                
-                dest_ports = calculator.search_ports(dest_query, 5)
-                if not dest_ports:
-                    print(f"❌ No ports found matching '{dest_query}'")
-                    continue
-                
-                if len(dest_ports) == 1:
-                    destination = dest_ports[0]
-                else:
-                    print(f"\n📍 Multiple ports found for '{dest_query}':")
-                    for i, port in enumerate(dest_ports, 1):
-                        alt_text = f" ({port.alternate})" if port.alternate else ""
-                        print(f"  {i}. {port.name}{alt_text} - {port.country}")
-                    
-                    try:
-                        choice = int(input("Select destination port (number): ")) - 1
-                        if 0 <= choice < len(dest_ports):
-                            destination = dest_ports[choice]
-                        else:
-                            print("❌ Invalid selection")
-                            continue
-                    except ValueError:
-                        print("❌ Please enter a valid number")
-                        continue
-                
-                # Calculate distance
-                print(f"\n⏳ Calculating distance from {origin.name} to {destination.name}...")
-                
-                try:
-                    result = calculator.calculate_distance(
-                        origin.lon, origin.lat, destination.lon, destination.lat
-                    )
-                    
-                    print(f"\n✅ Calculation Complete!")
-                    print(f"🌊 Maritime Distance: {result.distance_nm} nm ({result.distance_nm * 1.852:.1f} km)")
-                    print(f"📍 Origin Approximation: {result.origin_approx_km} km")
-                    print(f"📍 Destination Approximation: {result.dest_approx_km} km")
-                    print(f"🏷️  Route Name: {result.route_name}")
-                    
-                except Exception as e:
-                    print(f"❌ Calculation failed: {e}")
-            
-            elif command == 'coordinates':
-                print("\n📍 Coordinate-based Distance Calculation")
-                
-                try:
-                    origin_lon = float(input("Enter origin longitude: "))
-                    origin_lat = float(input("Enter origin latitude: "))
-                    dest_lon = float(input("Enter destination longitude: "))
-                    dest_lat = float(input("Enter destination latitude: "))
-                    
-                    print(f"\n⏳ Calculating distance...")
-                    
-                    result = calculator.calculate_distance(origin_lon, origin_lat, dest_lon, dest_lat)
-                    
-                    print(f"\n✅ Calculation Complete!")
-                    print(f"🌊 Maritime Distance: {result.distance_nm} nm ({result.distance_nm * 1.852:.1f} km)")
-                    print(f"📍 Origin Approximation: {result.origin_approx_km} km")
-                    print(f"📍 Destination Approximation: {result.dest_approx_km} km")
-                    print(f"🏷️  Route Name: {result.route_name}")
-                    
-                except ValueError:
-                    print("❌ Please enter valid coordinates (numbers)")
-                except Exception as e:
-                    print(f"❌ Calculation failed: {e}")
-            
-            else:
-                print("❌ Unknown command. Type 'help' for available commands.")
-                
-        except KeyboardInterrupt:
-            print("\n👋 Goodbye!")
-            break
-        except Exception as e:
-            print(f"❌ Error: {e}")
+    # Example calculations
+    print("🚀 Example Calculations:")
+    print()
+    
+    # Example 1: Hamburg to Shanghai
+    print("📍 Example 1: Hamburg → Shanghai")
+    try:
+        result = calculator.calculate_distance(9.99, 53.55, 121.8, 31.2)
+        print(f"   🌊 Maritime Distance: {result.distance_nm} nm ({result.distance_nm * 1.852:.1f} km)")
+        print(f"   📍 Origin Approximation: {result.origin_approx_km} km")
+        print(f"   📍 Destination Approximation: {result.dest_approx_km} km")
+        print(f"   🏷️  Route Name: {result.route_name}")
+    except Exception as e:
+        print(f"   ❌ Calculation failed: {e}")
+    
+    print()
+    
+    # Example 2: Rotterdam to Singapore
+    print("📍 Example 2: Rotterdam → Singapore")
+    try:
+        result = calculator.calculate_distance(4.4, 51.9, 103.8, 1.3)
+        print(f"   🌊 Maritime Distance: {result.distance_nm} nm ({result.distance_nm * 1.852:.1f} km)")
+        print(f"   📍 Origin Approximation: {result.origin_approx_km} km")
+        print(f"   📍 Destination Approximation: {result.dest_approx_km} km")
+        print(f"   🏷️  Route Name: {result.route_name}")
+    except Exception as e:
+        print(f"   ❌ Calculation failed: {e}")
+    
+    print()
+    
+    # Port search examples
+    print("🔍 Port Search Examples:")
+    print()
+    
+    # Search for Hamburg
+    hamburg_ports = calculator.search_ports("hamburg", 3)
+    if hamburg_ports:
+        print("📍 Hamburg ports found:")
+        for port in hamburg_ports:
+            alt_text = f" ({port.alternate})" if port.alternate else ""
+            print(f"   • {port.name}{alt_text} - {port.country}")
+            print(f"     Coordinates: {port.lon}°E, {port.lat}°N")
+    
+    print()
+    
+    # Search for Shanghai
+    shanghai_ports = calculator.search_ports("shanghai", 3)
+    if shanghai_ports:
+        print("📍 Shanghai ports found:")
+        for port in shanghai_ports:
+            alt_text = f" ({port.alternate})" if port.alternate else ""
+            print(f"   • {port.name}{alt_text} - {port.country}")
+            print(f"     Coordinates: {port.lon}°E, {port.lat}°N")
+    
+    print()
+    print("🎯 Ready for EU-ETS extension!")
 
 def main():
     """Main entry point"""
@@ -474,8 +371,8 @@ def main():
         print("❌ Please ensure searoute-engine/searoute.jar exists")
         return
     
-    # Start interactive mode
-    interactive_mode()
+    # Start demo mode
+    demo_mode()
 
 if __name__ == "__main__":
     main()
