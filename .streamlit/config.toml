@@ -1,0 +1,11 @@
+[server]
+# Disable file watching to prevent inotify limit errors
+fileWatcherType = "none"
+
+[runner]
+# Disable fast reruns
+fastReruns = false
+
+[browser]
+# Disable automatic browser opening
+gatherUsageStats = false

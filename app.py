@@ -32,8 +32,9 @@ class SeaRouteCalculator:
         self.ports = []
         self._load_ports()
     
-    def _load_ports(self):
-        """Load port database from ports.json"""
+    @st.cache_data(ttl=3600)  # Cache for 1 hour
+    def _load_ports_data(_self):
+        """Load port data from JSON file with caching"""
         # Try multiple possible locations for the ports file
         possible_paths = [
             'data/ports.json',
@@ -50,27 +51,33 @@ class SeaRouteCalculator:
         
         if not ports_file:
             print(f"❌ Port data not found in any of these locations: {possible_paths}")
-            return
+            return []
         
         try:
             with open(ports_file, 'r', encoding='utf-8') as f:
                 ports_data = json.load(f)
             
-            for port_data in ports_data:
-                port = Port(
-                    name=port_data['name'],
-                    country=port_data['country'],
-                    region=port_data['region'],
-                    lon=port_data['lon'],
-                    lat=port_data['lat'],
-                    alternate=port_data.get('alternate')
-                )
-                self.ports.append(port)
-            
-            print(f"✅ Loaded {len(self.ports)} ports from {ports_file}")
+            print(f"✅ Loaded {len(ports_data)} ports from {ports_file}")
+            return ports_data
             
         except Exception as e:
             print(f"❌ Error loading ports: {e}")
+            return []
+    
+    def _load_ports(self):
+        """Load port database from ports.json"""
+        ports_data = self._load_ports_data()
+        
+        for port_data in ports_data:
+            port = Port(
+                name=port_data['name'],
+                country=port_data['country'],
+                region=port_data['region'],
+                lon=port_data['lon'],
+                lat=port_data['lat'],
+                alternate=port_data.get('alternate')
+            )
+            self.ports.append(port)
     
     def search_ports(self, query: str, limit: int = 10) -> List[Port]:
         """Search ports by name, country, or region"""

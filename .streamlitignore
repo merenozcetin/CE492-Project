@@ -1,0 +1,10 @@
+# Ignore these files and directories
+*.pyc
+__pycache__/
+*.log
+.git/
+.gitignore
+README.md
+LICENSE
+CE492_Project_Description*.md
+*.md
