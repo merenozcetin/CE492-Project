@@ -372,7 +372,7 @@ class SeaRouteCalculator:
 
 # Page configuration
 st.set_page_config(
-    page_title="EU ETS Price Calculator",
+    page_title="ETS Price Calculator",
     page_icon="🇪🇺",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -499,7 +499,7 @@ st.markdown("""
 # Enhanced Header
 st.markdown("""
 <div class="main-header">
-    <h1>🇪🇺 EU ETS Price Calculator</h1>
+    <h1>🇪🇺 ETS Price Calculator</h1>
     <p>Calculate maritime distances and CO₂ emissions for ships worldwide</p>
 </div>
 """, unsafe_allow_html=True)
@@ -604,10 +604,7 @@ with tab1:
                         break
                 
                 if ship_found:
-                    st.markdown('<div class="success-box">', unsafe_allow_html=True)
                     st.success(f"✅ Ship IMO {imo_number} found in MRV database")
-                    st.markdown('</div>', unsafe_allow_html=True)
-                    
                     col1_1, col1_2 = st.columns(2)
                     with col1_1:
                         st.markdown('<div class="metric-container">', unsafe_allow_html=True)
@@ -618,9 +615,7 @@ with tab1:
                         st.metric("CO₂eq per nm", f"{ship_data.co2eq_per_nm:.1f} kg")
                         st.markdown('</div>', unsafe_allow_html=True)
                 else:
-                    st.markdown('<div class="error-box">', unsafe_allow_html=True)
                     st.error(f"❌ Ship IMO {imo_number} not found in MRV database")
-                    st.markdown('</div>', unsafe_allow_html=True)
     
     with col2:
         st.subheader("📍 Route Information")
@@ -643,11 +638,8 @@ with tab1:
             mrv_origin_port = None
         
         if mrv_origin_port:
-            st.markdown('<div class="port-card">', unsafe_allow_html=True)
             st.success(f"✅ **{mrv_origin_port.name}** ({mrv_origin_port.country})")
             st.info(f"📍 Coordinates: {mrv_origin_port.lat:.2f}°N, {mrv_origin_port.lon:.2f}°E")
-            st.write(f"🇪🇺 EEA Status: {'Yes' if mrv_origin_port.is_eea else 'No'}")
-            st.markdown('</div>', unsafe_allow_html=True)
         
         # Destination port selection - back to original dropdown
         st.write("**Destination Port**")
@@ -667,11 +659,8 @@ with tab1:
             mrv_dest_port = None
         
         if mrv_dest_port:
-            st.markdown('<div class="port-card">', unsafe_allow_html=True)
             st.success(f"✅ **{mrv_dest_port.name}** ({mrv_dest_port.country})")
             st.info(f"📍 Coordinates: {mrv_dest_port.lat:.2f}°N, {mrv_dest_port.lon:.2f}°E")
-            st.write(f"🇪🇺 EEA Status: {'Yes' if mrv_dest_port.is_eea else 'No'}")
-            st.markdown('</div>', unsafe_allow_html=True)
     
     # Calculate emissions button with enhanced validation
     st.markdown("---")
@@ -726,9 +715,7 @@ with tab1:
                 progress_bar.empty()
                 status_text.empty()
                 
-                st.markdown('<div class="success-box">', unsafe_allow_html=True)
                 st.success("✅ MRV Emissions Calculation Complete!")
-                st.markdown('</div>', unsafe_allow_html=True)
                 
                 # Enhanced results display
                 st.subheader("📊 Route Information")
@@ -793,7 +780,7 @@ with tab1:
                     </div>
                     ''', unsafe_allow_html=True)
                     
-                    # Create columns for cost display
+                    # Create columns for cost display with bar styling
                     cost_cols = st.columns(len(emission_result.ets_costs))
                     
                     for i, (year, cost) in enumerate(emission_result.ets_costs.items()):
@@ -812,11 +799,13 @@ with tab1:
                                 emission_type = "CO₂eq"
                                 color = "#dc3545"  # Red for full phase
                             
-                            st.metric(
-                                label=f"{year}",
-                                value=f"€{cost:,.0f}",
-                                help=f"Phase-in: {phase_in}, Based on: {emission_type}"
-                            )
+                            st.markdown(f'''
+                            <div class="metric-container" style="border-left: 4px solid {color};">
+                                <h4 style="color: {color}; margin: 0;">{year}</h4>
+                                <h2 style="color: {color}; margin: 0.5rem 0;">€{cost:,.0f}</h2>
+                                <small>Phase-in: {phase_in}<br>Based on: {emission_type}</small>
+                            </div>
+                            ''', unsafe_allow_html=True)
                     
                     # Combined calculation details and coverage information
                     st.markdown("---")
@@ -837,13 +826,9 @@ with tab1:
                     """)
                     
             except Exception as e:
-                st.markdown('<div class="error-box">', unsafe_allow_html=True)
                 st.error(f"❌ Calculation failed: {e}")
-                st.markdown('</div>', unsafe_allow_html=True)
         else:
-            st.markdown('<div class="warning-box">', unsafe_allow_html=True)
             st.warning("Please enter IMO number and select both origin and destination ports")
-            st.markdown('</div>', unsafe_allow_html=True)
     
     st.markdown('</div>', unsafe_allow_html=True)  # Close tab-container
 
@@ -874,11 +859,8 @@ with tab2:
             origin_port = None
         
         if origin_port:
-            st.markdown('<div class="port-card">', unsafe_allow_html=True)
             st.success(f"✅ **{origin_port.name}** ({origin_port.country})")
             st.info(f"📍 Coordinates: {origin_port.lat:.2f}°N, {origin_port.lon:.2f}°E")
-            st.write(f"🇪🇺 EEA Status: {'Yes' if origin_port.is_eea else 'No'}")
-            st.markdown('</div>', unsafe_allow_html=True)
     
     with col2:
         st.subheader("📍 Destination Port")
@@ -900,11 +882,8 @@ with tab2:
             dest_port = None
         
         if dest_port:
-            st.markdown('<div class="port-card">', unsafe_allow_html=True)
             st.success(f"✅ **{dest_port.name}** ({dest_port.country})")
             st.info(f"📍 Coordinates: {dest_port.lat:.2f}°N, {dest_port.lon:.2f}°E")
-            st.write(f"🇪🇺 EEA Status: {'Yes' if dest_port.is_eea else 'No'}")
-            st.markdown('</div>', unsafe_allow_html=True)
     
     # Enhanced distance calculation with validation
     st.markdown("---")
@@ -937,9 +916,7 @@ with tab2:
                 )
                 
                 if distance_result['success']:
-                    st.markdown('<div class="success-box">', unsafe_allow_html=True)
                     st.success("✅ Distance Calculation Complete!")
-                    st.markdown('</div>', unsafe_allow_html=True)
                     
                     # Enhanced results display
                     st.subheader("📊 Distance Results")
@@ -997,16 +974,12 @@ with tab2:
                     ''', unsafe_allow_html=True)
                     
                 else:
-                    st.markdown('<div class="error-box">', unsafe_allow_html=True)
                     st.error(f"❌ Calculation failed: {distance_result['error']}")
-                    st.markdown('</div>', unsafe_allow_html=True)
         else:
-            st.markdown('<div class="warning-box">', unsafe_allow_html=True)
             st.warning("Please select both origin and destination ports")
-            st.markdown('</div>', unsafe_allow_html=True)
     
     st.markdown('</div>', unsafe_allow_html=True)  # Close tab-container
 
 # Footer
 st.markdown("---")
-st.markdown("**EU ETS Price Calculator** - Powered by Python SeaRoute wrapper")
+st.markdown("**ETS Price Calculator** - Powered by Python SeaRoute wrapper")
