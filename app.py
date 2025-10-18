@@ -40,6 +40,68 @@ class Port:
     lat: float
     alternate: Optional[str] = None
 
+@st.cache_data(ttl=3600)  # Cache for 1 hour
+def load_ports_data():
+    """Load port data from JSON file with caching"""
+    # Try multiple possible locations for the ports file
+    possible_paths = [
+        'data/ports.json',
+        './data/ports.json',
+        '../data/ports.json',
+        'ports.json'
+    ]
+    
+    ports_file = None
+    for path in possible_paths:
+        if os.path.exists(path):
+            ports_file = path
+            break
+    
+    if not ports_file:
+        print(f"❌ Ports data not found in any of: {possible_paths}")
+        return []
+    
+    try:
+        with open(ports_file, 'r', encoding='utf-8') as f:
+            ports_data = json.load(f)
+        
+        print(f"✅ Loaded {len(ports_data)} ports from {ports_file}")
+        return ports_data
+        
+    except Exception as e:
+        print(f"❌ Error loading ports: {e}")
+        return []
+
+@st.cache_data(ttl=3600)  # Cache for 1 hour
+def load_ship_types_data():
+    """Load ship types data from CSV file with caching"""
+    ships_file = 'data/registeredships.csv'
+    
+    if not os.path.exists(ships_file):
+        print(f"❌ Ship types data not found: {ships_file}")
+        return []
+    
+    try:
+        import csv
+        ship_types = []
+        
+        with open(ships_file, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                ship_type = ShipType(
+                    name=row['Ship Type'],
+                    co2_per_nm=float(row[' Avg. CO₂ emissions per distance [kg CO₂ / n mile]']),
+                    co2eq_per_nm=float(row['Avg. CO₂eq emissions per distance [kg CO₂eq / n mile]'])
+                )
+                ship_types.append(ship_type)
+        
+        print(f"✅ Loaded {len(ship_types)} ship types from {ships_file}")
+        return ship_types
+        
+    except Exception as e:
+        print(f"❌ Error loading ship types: {e}")
+        return []
+
 class SeaRouteCalculator:
     """Main SeaRoute distance calculator using Python wrapper"""
     
@@ -49,41 +111,10 @@ class SeaRouteCalculator:
         self._load_ports()
         self._load_ship_types()
     
-    @st.cache_data(ttl=3600)  # Cache for 1 hour
-    def _load_ports_data():
-        """Load port data from JSON file with caching"""
-        # Try multiple possible locations for the ports file
-        possible_paths = [
-            'data/ports.json',
-            './data/ports.json',
-            '../data/ports.json',
-            'ports.json'
-        ]
-        
-        ports_file = None
-        for path in possible_paths:
-            if os.path.exists(path):
-                ports_file = path
-                break
-        
-        if not ports_file:
-            print(f"❌ Port data not found in any of these locations: {possible_paths}")
-            return []
-        
-        try:
-            with open(ports_file, 'r', encoding='utf-8') as f:
-                ports_data = json.load(f)
-            
-            print(f"✅ Loaded {len(ports_data)} ports from {ports_file}")
-            return ports_data
-            
-        except Exception as e:
-            print(f"❌ Error loading ports: {e}")
-            return []
     
     def _load_ports(self):
         """Load port database from ports.json"""
-        ports_data = self._load_ports_data()
+        ports_data = load_ports_data()
         
         for port_data in ports_data:
             port = Port(
@@ -98,40 +129,11 @@ class SeaRouteCalculator:
         
         print(f"✅ Created {len(self.ports)} port objects")
     
-    @st.cache_data(ttl=3600)  # Cache for 1 hour
-    def _load_ship_types_data():
-        """Load ship types data from CSV file with caching"""
-        ships_file = 'data/registeredships.csv'
-        
-        if not os.path.exists(ships_file):
-            print(f"❌ Ship types data not found: {ships_file}")
-            return []
-        
-        try:
-            import csv
-            ship_types = []
-            
-            with open(ships_file, 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    ship_type = ShipType(
-                        name=row['Ship Type'],
-                        co2_per_nm=float(row[' Avg. CO₂ emissions per distance [kg CO₂ / n mile]']),
-                        co2eq_per_nm=float(row['Avg. CO₂eq emissions per distance [kg CO₂eq / n mile]'])
-                    )
-                    ship_types.append(ship_type)
-            
-            print(f"✅ Loaded {len(ship_types)} ship types from {ships_file}")
-            return ship_types
-            
-        except Exception as e:
-            print(f"❌ Error loading ship types: {e}")
-            return []
     
     def _load_ship_types(self):
         """Load ship types from CSV file"""
         try:
-            self.ship_types = self._load_ship_types_data()
+            self.ship_types = load_ship_types_data()
             print(f"✅ Created {len(self.ship_types)} ship type objects")
         except Exception as e:
             print(f"❌ Error loading ship types: {e}")
