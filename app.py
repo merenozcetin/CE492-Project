@@ -154,8 +154,7 @@ class SeaRouteCalculator:
         
         return matches[:limit]
     
-    @st.cache_data(ttl=3600)  # Cache for 1 hour
-    def calculate_distance(_self, origin_lon: float, origin_lat: float, 
+    def calculate_distance(self, origin_lon: float, origin_lat: float, 
                           dest_lon: float, dest_lat: float) -> Dict:
         """Calculate maritime distance using Python SeaRoute wrapper"""
         
