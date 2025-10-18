@@ -183,68 +183,48 @@ with tab1:
     with col1:
         st.subheader("Origin Port")
         
-        # Origin port selection
-        origin_query = st.text_input("Search origin port:", placeholder="e.g., hamburg, rotterdam", key="origin_search")
+        # Origin port selection - direct dropdown with all ports
+        origin_options = [f"{p.name} ({p.country})" for p in calculator.ports]
+        origin_options = ["Select origin port..."] + origin_options
         
-        if origin_query and len(origin_query) >= 2:
-            origin_ports = calculator.search_ports(origin_query, 15)
-            if origin_ports:
-                origin_options = [f"{p.name} ({p.country})" for p in origin_ports]
-                origin_options = ["Select origin port..."] + origin_options
-                
-                origin_choice = st.selectbox("Origin port:", origin_options, key="origin_select")
-                
-                if origin_choice and origin_choice != "Select origin port...":
-                    for port in origin_ports:
-                        if f"{port.name} ({port.country})" == origin_choice:
-                            origin_port = port
-                            break
-                    else:
-                        origin_port = None
-                else:
-                    origin_port = None
-                
-                if origin_port:
-                    st.success(f"✅ **{origin_port.name}** ({origin_port.country})")
-                    st.info(f"📍 Coordinates: {origin_port.lat:.2f}°N, {origin_port.lon:.2f}°E")
+        origin_choice = st.selectbox("Choose origin port:", origin_options, key="origin_select")
+        
+        if origin_choice and origin_choice != "Select origin port...":
+            for port in calculator.ports:
+                if f"{port.name} ({port.country})" == origin_choice:
+                    origin_port = port
+                    break
             else:
-                st.warning(f"No ports found matching '{origin_query}'")
                 origin_port = None
         else:
             origin_port = None
+        
+        if origin_port:
+            st.success(f"✅ **{origin_port.name}** ({origin_port.country})")
+            st.info(f"📍 Coordinates: {origin_port.lat:.2f}°N, {origin_port.lon:.2f}°E")
     
     with col2:
         st.subheader("Destination Port")
         
-        # Destination port selection
-        dest_query = st.text_input("Search destination port:", placeholder="e.g., shanghai, singapore", key="dest_search")
+        # Destination port selection - direct dropdown with all ports
+        dest_options = [f"{p.name} ({p.country})" for p in calculator.ports]
+        dest_options = ["Select destination port..."] + dest_options
         
-        if dest_query and len(dest_query) >= 2:
-            dest_ports = calculator.search_ports(dest_query, 15)
-            if dest_ports:
-                dest_options = [f"{p.name} ({p.country})" for p in dest_ports]
-                dest_options = ["Select destination port..."] + dest_options
-                
-                dest_choice = st.selectbox("Destination port:", dest_options, key="dest_select")
-                
-                if dest_choice and dest_choice != "Select destination port...":
-                    for port in dest_ports:
-                        if f"{port.name} ({port.country})" == dest_choice:
-                            dest_port = port
-                            break
-                    else:
-                        dest_port = None
-                else:
-                    dest_port = None
-                
-                if dest_port:
-                    st.success(f"✅ **{dest_port.name}** ({dest_port.country})")
-                    st.info(f"📍 Coordinates: {dest_port.lat:.2f}°N, {dest_port.lon:.2f}°E")
+        dest_choice = st.selectbox("Choose destination port:", dest_options, key="dest_select")
+        
+        if dest_choice and dest_choice != "Select destination port...":
+            for port in calculator.ports:
+                if f"{port.name} ({port.country})" == dest_choice:
+                    dest_port = port
+                    break
             else:
-                st.warning(f"No ports found matching '{dest_query}'")
                 dest_port = None
         else:
             dest_port = None
+        
+        if dest_port:
+            st.success(f"✅ **{dest_port.name}** ({dest_port.country})")
+            st.info(f"📍 Coordinates: {dest_port.lat:.2f}°N, {dest_port.lon:.2f}°E")
     
     # Calculate distance button
     if st.button("🌊 Calculate Distance", type="primary"):
