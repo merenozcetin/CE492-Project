@@ -16,6 +16,22 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass
 
 @dataclass
+class MRVShip:
+    """MRV ship data for emissions calculation"""
+    imo_number: str
+    co2_per_nm: float
+    co2eq_per_nm: float
+
+@dataclass
+class EmissionResult:
+    """Emission calculation result"""
+    imo_number: str
+    ship_name: str
+    distance_nm: float
+    co2_emissions: float
+    co2eq_emissions: float
+
+@dataclass
 class Port:
     """Port information"""
     name: str
@@ -31,7 +47,9 @@ class SeaRouteCalculator:
     
     def __init__(self):
         self.ports = []
+        self.mrv_ships = []
         self._load_ports()
+        self._load_mrv_data()
     
     def _load_ports(self):
         """Load port database from ports.json"""
@@ -55,6 +73,34 @@ class SeaRouteCalculator:
             
         except Exception as e:
             print(f"❌ Error loading ports: {e}")
+    
+    def _load_mrv_data(self):
+        """Load MRV ship data from CSV file"""
+        try:
+            import csv
+            
+            with open('data/mrv_data.csv', 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    # Skip rows with "Division by zero!" errors
+                    if row['CO₂ emissions per distance [kg CO₂ / n mile]'] == 'Division by zero!':
+                        continue
+                    
+                    try:
+                        ship = MRVShip(
+                            imo_number=row['IMO Number'],
+                            co2_per_nm=float(row['CO₂ emissions per distance [kg CO₂ / n mile]']),
+                            co2eq_per_nm=float(row['CO₂eq emissions per distance [kg CO₂eq / n mile]'])
+                        )
+                        self.mrv_ships.append(ship)
+                    except ValueError:
+                        # Skip rows with invalid data
+                        continue
+            
+            print(f"✅ Loaded {len(self.mrv_ships)} MRV ships")
+            
+        except Exception as e:
+            print(f"❌ Error loading MRV data: {e}")
     
     def search_ports(self, query: str, limit: int = 10) -> List[Port]:
         """Search ports by name, country, or region"""
@@ -132,6 +178,42 @@ class SeaRouteCalculator:
                 'success': False,
                 'error': f"SeaRoute calculation failed: {str(e)}"
             }
+    
+    def calculate_emissions(self, imo_number: str, origin_port: Port, dest_port: Port) -> EmissionResult:
+        """Calculate CO2 emissions for a specific ship and route"""
+        
+        # Find the ship by IMO number
+        ship = None
+        for mrv_ship in self.mrv_ships:
+            if mrv_ship.imo_number == imo_number:
+                ship = mrv_ship
+                break
+        
+        if not ship:
+            raise Exception(f"Ship with IMO number {imo_number} not found in MRV database")
+        
+        # Calculate distance first
+        distance_result = self.calculate_distance(
+            origin_port.lon, origin_port.lat,
+            dest_port.lon, dest_port.lat
+        )
+        
+        if not distance_result['success']:
+            raise Exception(f"Distance calculation failed: {distance_result['error']}")
+        
+        distance_nm = distance_result['distance_nm']
+        
+        # Calculate emissions
+        co2_emissions = distance_nm * ship.co2_per_nm
+        co2eq_emissions = distance_nm * ship.co2eq_per_nm
+        
+        return EmissionResult(
+            imo_number=imo_number,
+            ship_name=f"Ship IMO {imo_number}",
+            distance_nm=distance_nm,
+            co2_emissions=round(co2_emissions, 2),
+            co2eq_emissions=round(co2eq_emissions, 2)
+        )
 
 # Page configuration
 st.set_page_config(
@@ -155,6 +237,7 @@ calculator = get_calculator()
 with st.sidebar:
     st.header("ℹ️ About")
     st.info(f"**{len(calculator.ports)} ports** loaded from database")
+    st.info(f"**{len(calculator.mrv_ships)} MRV ships** loaded from database")
     
     # Debug info
     if len(calculator.ports) == 0:
@@ -175,7 +258,7 @@ with st.sidebar:
     """)
 
 # Main tabs
-tab1, tab2, tab3 = st.tabs(["🚢 Port-to-Port", "📍 Coordinates", "🔍 Port Search"])
+tab1, tab2, tab3, tab4 = st.tabs(["🚢 Port-to-Port", "📍 Coordinates", "🔍 Port Search", "🌍 MRV Emissions"])
 
 with tab1:
     st.header("Port-to-Port Distance Calculation")
@@ -352,6 +435,147 @@ with tab3:
             st.dataframe(port_data, use_container_width=True)
         else:
             st.warning(f"No ports found matching '{search_query}'")
+
+with tab4:
+    st.header("🌍 MRV Emissions Calculator")
+    st.markdown("Calculate CO₂ emissions for specific ships using IMO numbers and MRV data")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Ship Information")
+        
+        # IMO number input
+        imo_number = st.text_input("Enter IMO Number:", placeholder="e.g., 1013676", key="imo_input")
+        
+        if imo_number:
+            # Check if IMO exists in MRV data
+            ship_found = False
+            ship_data = None
+            for ship in calculator.mrv_ships:
+                if ship.imo_number == imo_number:
+                    ship_found = True
+                    ship_data = ship
+                    break
+            
+            if ship_found:
+                st.success(f"✅ Ship IMO {imo_number} found in MRV database")
+                col1_1, col1_2 = st.columns(2)
+                with col1_1:
+                    st.metric("CO₂ per nm", f"{ship_data.co2_per_nm:.1f} kg")
+                with col1_2:
+                    st.metric("CO₂eq per nm", f"{ship_data.co2eq_per_nm:.1f} kg")
+            else:
+                st.error(f"❌ Ship IMO {imo_number} not found in MRV database")
+    
+    with col2:
+        st.subheader("Route Information")
+        
+        # Origin port selection
+        st.write("**Origin Port**")
+        origin_options = [f"{p.name} ({p.country})" for p in calculator.ports]
+        origin_options = ["Select origin port..."] + origin_options
+        
+        origin_choice = st.selectbox("Choose origin port:", origin_options, key="mrv_origin_select")
+        
+        if origin_choice and origin_choice != "Select origin port...":
+            for port in calculator.ports:
+                if f"{port.name} ({port.country})" == origin_choice:
+                    mrv_origin_port = port
+                    break
+            else:
+                mrv_origin_port = None
+        else:
+            mrv_origin_port = None
+        
+        # Destination port selection
+        st.write("**Destination Port**")
+        dest_options = [f"{p.name} ({p.country})" for p in calculator.ports]
+        dest_options = ["Select destination port..."] + dest_options
+        
+        dest_choice = st.selectbox("Choose destination port:", dest_options, key="mrv_dest_select")
+        
+        if dest_choice and dest_choice != "Select destination port...":
+            for port in calculator.ports:
+                if f"{port.name} ({port.country})" == dest_choice:
+                    mrv_dest_port = port
+                    break
+            else:
+                mrv_dest_port = None
+        else:
+            mrv_dest_port = None
+    
+    # Calculate emissions button
+    if st.button("🌍 Calculate MRV Emissions", type="primary"):
+        if imo_number and mrv_origin_port and mrv_dest_port:
+            try:
+                with st.spinner("Calculating emissions..."):
+                    emission_result = calculator.calculate_emissions(
+                        imo_number, mrv_origin_port, mrv_dest_port
+                    )
+                    
+                    st.success("✅ MRV Emissions Calculation Complete!")
+                    
+                    # Display results
+                    st.subheader("📊 Route Information")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.write(f"**Ship:** IMO {emission_result.imo_number}")
+                        st.write(f"**Origin:** {mrv_origin_port.name} ({mrv_origin_port.country})")
+                    with col2:
+                        st.write(f"**Destination:** {mrv_dest_port.name} ({mrv_dest_port.country})")
+                        st.write(f"**Distance:** {emission_result.distance_nm} nm")
+                    
+                    st.subheader("🌍 CO₂ Emissions")
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.metric(
+                            label="Total CO₂ Emissions",
+                            value=f"{emission_result.co2_emissions:,.0f} kg",
+                            help=f"{emission_result.co2_emissions/1000:.1f} tonnes"
+                        )
+                    
+                    with col2:
+                        st.metric(
+                            label="Total CO₂eq Emissions", 
+                            value=f"{emission_result.co2eq_emissions:,.0f} kg",
+                            help=f"{emission_result.co2eq_emissions/1000:.1f} tonnes"
+                        )
+                    
+                    with col3:
+                        st.metric(
+                            label="Distance",
+                            value=f"{emission_result.distance_nm} nm",
+                            help="Maritime distance"
+                        )
+                    
+                    # EU-ETS Information
+                    st.subheader("🇪🇺 EU-ETS Information")
+                    
+                    # Check if route involves EEA ports
+                    origin_eea = mrv_origin_port.is_eea
+                    dest_eea = mrv_dest_port.is_eea
+                    
+                    if origin_eea and dest_eea:
+                        st.info("**EEA-to-EEA Route**: This route is fully covered by EU-ETS")
+                    elif origin_eea or dest_eea:
+                        st.warning("**Mixed Route**: This route involves both EEA and non-EEA ports")
+                    else:
+                        st.info("**Non-EEA Route**: This route is not covered by EU-ETS")
+                    
+                    st.info("""
+                    **EU-ETS Maritime Coverage:**
+                    - Applies to ships of 5,000 GT and above
+                    - Covers CO₂ emissions from voyages within EU/EEA
+                    - Phase-in period: 2024-2026 (40%, 70%, 100%)
+                    - Free allowances: 100% in 2024, reducing to 0% by 2026
+                    """)
+                    
+            except Exception as e:
+                st.error(f"❌ Calculation failed: {e}")
+        else:
+            st.warning("Please enter IMO number and select both origin and destination ports")
 
 # Footer
 st.markdown("---")
