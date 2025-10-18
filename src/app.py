@@ -372,8 +372,8 @@ class SeaRouteCalculator:
 
 # Page configuration
 st.set_page_config(
-    page_title="SeaRoute Maritime Calculator",
-    page_icon="🌊",
+    page_title="EU ETS Price Calculator",
+    page_icon="🇪🇺",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -499,7 +499,7 @@ st.markdown("""
 # Enhanced Header
 st.markdown("""
 <div class="main-header">
-    <h1>🌊 SeaRoute Maritime Calculator</h1>
+    <h1>🇪🇺 EU ETS Price Calculator</h1>
     <p>Calculate maritime distances and CO₂ emissions for ships worldwide</p>
 </div>
 """, unsafe_allow_html=True)
@@ -774,31 +774,8 @@ with tab1:
                     )
                     st.markdown('</div>', unsafe_allow_html=True)
                     
-                # EU-ETS Cost Information with enhanced visualization
+                # EU-ETS Cost Information - simplified
                 st.subheader("🇪🇺 EU-ETS Cost Analysis")
-                
-                # Check if route involves EEA ports
-                origin_eea = mrv_origin_port.is_eea
-                dest_eea = mrv_dest_port.is_eea
-                
-                if origin_eea and dest_eea:
-                    coverage_type = "**EEA-to-EEA Route**"
-                    coverage_desc = "This route is fully covered by EU-ETS (100%)"
-                    st.markdown('<div class="success-box">', unsafe_allow_html=True)
-                    st.info(f"{coverage_type}: {coverage_desc}")
-                    st.markdown('</div>', unsafe_allow_html=True)
-                elif origin_eea or dest_eea:
-                    coverage_type = "**Mixed Route**"
-                    coverage_desc = "This route involves both EEA and non-EEA ports (50%)"
-                    st.markdown('<div class="warning-box">', unsafe_allow_html=True)
-                    st.warning(f"{coverage_type}: {coverage_desc}")
-                    st.markdown('</div>', unsafe_allow_html=True)
-                else:
-                    coverage_type = "**Non-EEA Route**"
-                    coverage_desc = "This route is not covered by EU-ETS (0%)"
-                    st.markdown('<div class="error-box">', unsafe_allow_html=True)
-                    st.info(f"{coverage_type}: {coverage_desc}")
-                    st.markdown('</div>', unsafe_allow_html=True)
                 
                 # Display ETS costs by year with enhanced styling
                 if emission_result.ets_costs:
@@ -835,33 +812,29 @@ with tab1:
                                 emission_type = "CO₂eq"
                                 color = "#dc3545"  # Red for full phase
                             
-                            st.markdown(f'''
-                            <div class="metric-container" style="border-left: 4px solid {color};">
-                                <h4 style="color: {color}; margin: 0;">{year}</h4>
-                                <h2 style="color: {color}; margin: 0.5rem 0;">€{cost:,.0f}</h2>
-                                <small>Phase-in: {phase_in}<br>Based on: {emission_type}</small>
-                            </div>
-                            ''', unsafe_allow_html=True)
+                            st.metric(
+                                label=f"{year}",
+                                value=f"€{cost:,.0f}",
+                                help=f"Phase-in: {phase_in}, Based on: {emission_type}"
+                            )
                     
-                    # Enhanced summary information
+                    # Combined calculation details and coverage information
                     st.markdown("---")
                     st.markdown("""
                     ### 📋 EU-ETS Calculation Details
+                    
+                    **Coverage Rules:**
+                    - **EEA-to-EEA Route**: 100% coverage (both ports in EEA)
+                    - **Mixed Route**: 50% coverage (one EEA, one non-EEA port)
+                    - **Non-EEA Route**: 0% coverage (both ports outside EEA)
+                    
+                    **Calculation Method:**
                     - **2024-2025**: Based on CO₂ emissions
                     - **2026+**: Based on CO₂eq emissions  
                     - **Phase-in**: 40% (2024), 70% (2025), 100% (2026+)
-                    - **Coverage**: EEA-EEA (100%), Mixed (50%), Non-EEA (0%)
+                    - **Applies to**: Ships of 5,000 GT and above
+                    - **Free allowances**: 100% in 2024, reducing to 0% by 2026
                     """)
-                
-                st.markdown('<div class="success-box">', unsafe_allow_html=True)
-                st.info("""
-                **EU-ETS Maritime Coverage:**
-                - Applies to ships of 5,000 GT and above
-                - Covers CO₂ emissions from voyages within EU/EEA
-                - Phase-in period: 2024-2026 (40%, 70%, 100%)
-                - Free allowances: 100% in 2024, reducing to 0% by 2026
-                """)
-                st.markdown('</div>', unsafe_allow_html=True)
                     
             except Exception as e:
                 st.markdown('<div class="error-box">', unsafe_allow_html=True)
@@ -1036,4 +1009,4 @@ with tab2:
 
 # Footer
 st.markdown("---")
-st.markdown("**SeaRoute Maritime Distance Calculator** - Powered by Python SeaRoute wrapper")
+st.markdown("**EU ETS Price Calculator** - Powered by Python SeaRoute wrapper")
