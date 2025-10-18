@@ -188,12 +188,23 @@ with tab1:
         st.subheader("Origin Port")
         origin_query = st.text_input("Search origin port:", placeholder="e.g., hamburg, rotterdam", key="origin_search")
         
+        # Show search results immediately as user types
         if origin_query and len(origin_query) >= 2:
             origin_ports = calculator.search_ports(origin_query, 10)
             if origin_ports:
-                origin_options = [f"{p.name} ({p.country})" for p in origin_ports]
-                origin_choice = st.selectbox("Select origin port:", origin_options, key="origin_select")
-                origin_port = origin_ports[origin_options.index(origin_choice)]
+                st.write(f"**Found {len(origin_ports)} ports:**")
+                for i, port in enumerate(origin_ports):
+                    if st.button(f"{port.name} ({port.country})", key=f"origin_btn_{i}"):
+                        st.session_state.origin_selected = port
+                        st.rerun()
+                
+                # Show selected port
+                if 'origin_selected' in st.session_state:
+                    selected = st.session_state.origin_selected
+                    st.success(f"✅ Selected: {selected.name} ({selected.country})")
+                    origin_port = selected
+                else:
+                    origin_port = None
             else:
                 st.warning(f"No ports found matching '{origin_query}'")
                 st.write(f"Debug: Searched in {len(calculator.ports)} ports")
@@ -205,18 +216,37 @@ with tab1:
         st.subheader("Destination Port")
         dest_query = st.text_input("Search destination port:", placeholder="e.g., shanghai, singapore", key="dest_search")
         
+        # Show search results immediately as user types
         if dest_query and len(dest_query) >= 2:
             dest_ports = calculator.search_ports(dest_query, 10)
             if dest_ports:
-                dest_options = [f"{p.name} ({p.country})" for p in dest_ports]
-                dest_choice = st.selectbox("Select destination port:", dest_options, key="dest_select")
-                dest_port = dest_ports[dest_options.index(dest_choice)]
+                st.write(f"**Found {len(dest_ports)} ports:**")
+                for i, port in enumerate(dest_ports):
+                    if st.button(f"{port.name} ({port.country})", key=f"dest_btn_{i}"):
+                        st.session_state.dest_selected = port
+                        st.rerun()
+                
+                # Show selected port
+                if 'dest_selected' in st.session_state:
+                    selected = st.session_state.dest_selected
+                    st.success(f"✅ Selected: {selected.name} ({selected.country})")
+                    dest_port = selected
+                else:
+                    dest_port = None
             else:
                 st.warning(f"No ports found matching '{dest_query}'")
                 st.write(f"Debug: Searched in {len(calculator.ports)} ports")
                 dest_port = None
         else:
             dest_port = None
+    
+    # Clear selections button
+    if st.button("🗑️ Clear Selections"):
+        if 'origin_selected' in st.session_state:
+            del st.session_state.origin_selected
+        if 'dest_selected' in st.session_state:
+            del st.session_state.dest_selected
+        st.rerun()
     
     # Calculate button
     if st.button("🚀 Calculate Distance", type="primary"):
