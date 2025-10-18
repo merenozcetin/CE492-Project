@@ -88,8 +88,34 @@ class SeaRouteCalculator:
                 destination=[dest_lon, dest_lat]
             )
             
+            # Debug: Print the route result to see its structure
+            print(f"Route result: {route}")
+            print(f"Route type: {type(route)}")
+            print(f"Route keys: {route.keys() if isinstance(route, dict) else 'Not a dict'}")
+            
             # Extract distance from route result
-            distance_km = route['length'] / 1000  # Convert from meters to km
+            # Try different possible keys for distance
+            if isinstance(route, dict):
+                if 'length' in route:
+                    distance_km = route['length'] / 1000  # Convert from meters to km
+                elif 'distance' in route:
+                    distance_km = route['distance'] / 1000  # Convert from meters to km
+                elif 'total_distance' in route:
+                    distance_km = route['total_distance'] / 1000  # Convert from meters to km
+                else:
+                    # If no distance key found, try to calculate from coordinates
+                    import math
+                    # Simple great circle distance calculation as fallback
+                    lat1, lon1 = math.radians(origin_lat), math.radians(origin_lon)
+                    lat2, lon2 = math.radians(dest_lat), math.radians(dest_lon)
+                    dlat = lat2 - lat1
+                    dlon = lon2 - lon1
+                    a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+                    c = 2 * math.asin(math.sqrt(a))
+                    distance_km = 6371 * c  # Earth radius in km
+            else:
+                raise Exception(f"Unexpected route result type: {type(route)}")
+            
             distance_nm = distance_km / 1.852  # Convert km to nautical miles
             
             return {
