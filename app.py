@@ -16,6 +16,21 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass
 
 @dataclass
+class ShipType:
+    """Ship type information"""
+    name: str
+    co2_per_nm: float
+    co2eq_per_nm: float
+
+@dataclass
+class EmissionResult:
+    """Emission calculation result"""
+    ship_type: str
+    distance_nm: float
+    co2_emissions: float
+    co2eq_emissions: float
+
+@dataclass
 class Port:
     """Port information"""
     name: str
@@ -30,7 +45,9 @@ class SeaRouteCalculator:
     
     def __init__(self):
         self.ports = []
+        self.ship_types = []
         self._load_ports()
+        self._load_ship_types()
     
     @st.cache_data(ttl=3600)  # Cache for 1 hour
     def _load_ports_data():
@@ -80,6 +97,41 @@ class SeaRouteCalculator:
             self.ports.append(port)
         
         print(f"✅ Created {len(self.ports)} port objects")
+    
+    @st.cache_data(ttl=3600)  # Cache for 1 hour
+    def _load_ship_types_data():
+        """Load ship types data from CSV file with caching"""
+        ships_file = 'data/registeredships.csv'
+        
+        if not os.path.exists(ships_file):
+            print(f"❌ Ship types data not found: {ships_file}")
+            return []
+        
+        try:
+            import csv
+            ship_types = []
+            
+            with open(ships_file, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    ship_type = ShipType(
+                        name=row['Ship Type'],
+                        co2_per_nm=float(row[' Avg. CO₂ emissions per distance [kg CO₂ / n mile]']),
+                        co2eq_per_nm=float(row['Avg. CO₂eq emissions per distance [kg CO₂eq / n mile]'])
+                    )
+                    ship_types.append(ship_type)
+            
+            print(f"✅ Loaded {len(ship_types)} ship types from {ships_file}")
+            return ship_types
+            
+        except Exception as e:
+            print(f"❌ Error loading ship types: {e}")
+            return []
+    
+    def _load_ship_types(self):
+        """Load ship types from CSV file"""
+        self.ship_types = self._load_ship_types_data()
+        print(f"✅ Created {len(self.ship_types)} ship type objects")
     
     def search_ports(self, query: str, limit: int = 10) -> List[Port]:
         """Search ports by name, country, or region"""
@@ -133,6 +185,29 @@ class SeaRouteCalculator:
                 'success': False,
                 'error': f"SeaRoute calculation failed: {str(e)}"
             }
+    
+    def calculate_emissions(self, ship_type_name: str, distance_nm: float) -> EmissionResult:
+        """Calculate CO2 emissions for a given ship type and distance"""
+        # Find the ship type
+        ship_type = None
+        for st in self.ship_types:
+            if st.name == ship_type_name:
+                ship_type = st
+                break
+        
+        if not ship_type:
+            raise Exception(f"Ship type '{ship_type_name}' not found")
+        
+        # Calculate emissions
+        co2_emissions = distance_nm * ship_type.co2_per_nm
+        co2eq_emissions = distance_nm * ship_type.co2eq_per_nm
+        
+        return EmissionResult(
+            ship_type=ship_type_name,
+            distance_nm=distance_nm,
+            co2_emissions=round(co2_emissions, 2),
+            co2eq_emissions=round(co2eq_emissions, 2)
+        )
 
 # Page configuration
 st.set_page_config(
@@ -157,6 +232,7 @@ calculator = get_calculator()
 with st.sidebar:
     st.header("ℹ️ About")
     st.info(f"**{len(calculator.ports)} ports** loaded from database")
+    st.info(f"**{len(calculator.ship_types)} ship types** loaded from database")
     
     # Debug info
     if len(calculator.ports) == 0:
@@ -177,7 +253,7 @@ with st.sidebar:
     """)
 
 # Main tabs
-tab1, tab2, tab3 = st.tabs(["🚢 Port-to-Port", "📍 Coordinates", "🔍 Port Search"])
+tab1, tab2, tab3, tab4 = st.tabs(["🚢 Port-to-Port", "📍 Coordinates", "🔍 Port Search", "🌍 EU-ETS Emissions"])
 
 with tab1:
     st.header("Port-to-Port Distance Calculation")
@@ -394,6 +470,161 @@ with tab3:
             st.dataframe(port_data, use_container_width=True)
         else:
             st.warning(f"No ports found matching '{search_query}'")
+
+with tab4:
+    st.header("🌍 EU-ETS Emissions Calculator")
+    st.markdown("Calculate CO₂ emissions for maritime routes based on ship type")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Route Selection")
+        
+        # Origin port selection
+        origin_query = st.text_input("Search origin port:", placeholder="e.g., hamburg, rotterdam", key="eu_origin_search")
+        
+        if origin_query and len(origin_query) >= 2:
+            origin_ports = calculator.search_ports(origin_query, 15)
+            if origin_ports:
+                origin_options = [f"{p.name} ({p.country})" for p in origin_ports]
+                origin_options = ["Select origin port..."] + origin_options
+                
+                origin_choice = st.selectbox("Origin port:", origin_options, key="eu_origin_select")
+                
+                if origin_choice and origin_choice != "Select origin port...":
+                    for port in origin_ports:
+                        if f"{port.name} ({port.country})" == origin_choice:
+                            eu_origin_port = port
+                            break
+                else:
+                    eu_origin_port = None
+            else:
+                st.warning(f"No ports found matching '{origin_query}'")
+                eu_origin_port = None
+        else:
+            eu_origin_port = None
+    
+    with col2:
+        st.subheader("Destination Selection")
+        
+        # Destination port selection
+        dest_query = st.text_input("Search destination port:", placeholder="e.g., shanghai, singapore", key="eu_dest_search")
+        
+        if dest_query and len(dest_query) >= 2:
+            dest_ports = calculator.search_ports(dest_query, 15)
+            if dest_ports:
+                dest_options = [f"{p.name} ({p.country})" for p in dest_ports]
+                dest_options = ["Select destination port..."] + dest_options
+                
+                dest_choice = st.selectbox("Destination port:", dest_options, key="eu_dest_select")
+                
+                if dest_choice and dest_choice != "Select destination port...":
+                    for port in dest_ports:
+                        if f"{port.name} ({port.country})" == dest_choice:
+                            eu_dest_port = port
+                            break
+                else:
+                    eu_dest_port = None
+            else:
+                st.warning(f"No ports found matching '{dest_query}'")
+                eu_dest_port = None
+        else:
+            eu_dest_port = None
+    
+    # Ship type selection
+    st.subheader("🚢 Ship Type Selection")
+    
+    if calculator.ship_types:
+        ship_options = [st.name for st in calculator.ship_types]
+        ship_options = ["Select ship type..."] + ship_options
+        
+        selected_ship_type = st.selectbox("Choose ship type:", ship_options, key="ship_type_select")
+        
+        if selected_ship_type and selected_ship_type != "Select ship type...":
+            # Show ship type info
+            ship_type = next((st for st in calculator.ship_types if st.name == selected_ship_type), None)
+            if ship_type:
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("CO₂ per nm", f"{ship_type.co2_per_nm:.1f} kg")
+                with col2:
+                    st.metric("CO₂eq per nm", f"{ship_type.co2eq_per_nm:.1f} kg")
+        else:
+            ship_type = None
+    else:
+        st.error("No ship types loaded")
+        ship_type = None
+    
+    # Calculate emissions button
+    if st.button("🌍 Calculate Emissions", type="primary"):
+        if eu_origin_port and eu_dest_port and ship_type:
+            with st.spinner("Calculating distance and emissions..."):
+                # Calculate distance first
+                distance_result = calculator.calculate_distance(
+                    eu_origin_port.lon, eu_origin_port.lat, 
+                    eu_dest_port.lon, eu_dest_port.lat
+                )
+                
+                if distance_result['success']:
+                    # Calculate emissions
+                    try:
+                        emission_result = calculator.calculate_emissions(
+                            selected_ship_type, 
+                            distance_result['distance_nm']
+                        )
+                        
+                        st.success("✅ Emissions Calculation Complete!")
+                        
+                        # Display results
+                        st.subheader("📊 Route Information")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write(f"**Origin:** {eu_origin_port.name} ({eu_origin_port.country})")
+                            st.write(f"**Destination:** {eu_dest_port.name} ({eu_dest_port.country})")
+                        with col2:
+                            st.write(f"**Distance:** {distance_result['distance_nm']} nm ({distance_result['distance_km']} km)")
+                            st.write(f"**Ship Type:** {selected_ship_type}")
+                        
+                        st.subheader("🌍 CO₂ Emissions")
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            st.metric(
+                                label="Total CO₂ Emissions",
+                                value=f"{emission_result.co2_emissions:,.0f} kg",
+                                help=f"{emission_result.co2_emissions/1000:.1f} tonnes"
+                            )
+                        
+                        with col2:
+                            st.metric(
+                                label="Total CO₂eq Emissions", 
+                                value=f"{emission_result.co2eq_emissions:,.0f} kg",
+                                help=f"{emission_result.co2eq_emissions/1000:.1f} tonnes"
+                            )
+                        
+                        with col3:
+                            st.metric(
+                                label="CO₂ per nm",
+                                value=f"{ship_type.co2_per_nm:.1f} kg",
+                                help="Emission factor"
+                            )
+                        
+                        # EU-ETS Information
+                        st.subheader("🇪🇺 EU-ETS Information")
+                        st.info("""
+                        **EU-ETS Maritime Coverage:**
+                        - Applies to ships of 5,000 GT and above
+                        - Covers CO₂ emissions from voyages within EU/EEA
+                        - Phase-in period: 2024-2026 (40%, 70%, 100%)
+                        - Free allowances: 100% in 2024, reducing to 0% by 2026
+                        """)
+                        
+                    except Exception as e:
+                        st.error(f"❌ Emission calculation failed: {e}")
+                else:
+                    st.error(f"❌ Distance calculation failed: {distance_result['error']}")
+        else:
+            st.warning("Please select both origin and destination ports, and choose a ship type")
 
 # Footer
 st.markdown("---")
