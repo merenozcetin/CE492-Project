@@ -1,6 +1,6 @@
-# 🌊 SeaRoute Web Interface
+# 🌊 SeaRoute Maritime Distance Calculator
 
-**Calculate maritime distances between ports worldwide with a beautiful web interface!**
+**Calculate maritime distances between ports worldwide with a standalone Python application!**
 
 ## 📁 Project Structure
 
@@ -8,86 +8,115 @@
 searoute-master/
 ├── 📖 README.md                    # This file
 ├── 📄 LICENSE                      # Project license
-├── 🌐 web-interface/               # Web application files
-│   ├── port_calculator.html        # Beautiful HTML interface
-│   └── searoute_server.py          # Python backend server
-├── 🚀 scripts/                     # Launcher scripts
-│   ├── start_web_interface.bat     # Windows launcher
-│   └── start_web_interface.ps1     # PowerShell launcher
-├── ☕ searoute-engine/              # SeaRoute calculation engine
-│   ├── searoute.jar                # Core Java engine
-│   ├── single_test.csv             # Single route template
-│   ├── test_input.csv               # Sample routes
-│   └── marnet/                      # Maritime network data
-│       ├── marnet_plus_5km.gpkg
-│       ├── marnet_plus_10km.gpkg
-│       ├── marnet_plus_20km.gpkg
-│       ├── marnet_plus_50km.gpkg
-│       └── marnet_plus_100km.gpkg
-└── 📚 docs/                         # Documentation
-    ├── SETUP_GUIDE.md              # Detailed setup instructions
-    ├── WEB_INTERFACE_GUIDE.md      # Web interface user guide
-    └── FINAL_CLEANUP_SUMMARY.md    # Project cleanup summary
+├── 🐍 searoute_calculator.py       # Main standalone calculator
+├── 📋 CE492_Project_Description[1].md  # Project requirements
+├── 🌐 web-interface/               # Port database
+│   └── port_calculator.html        # Port database (3,800+ ports)
+└── ☕ searoute-engine/              # SeaRoute calculation engine
+    ├── searoute.jar                # Core Java engine
+    ├── single_test.csv             # Single route template
+    ├── test_input.csv               # Sample routes
+    └── marnet/                      # Maritime network data
+        ├── marnet_plus_5km.gpkg
+        ├── marnet_plus_10km.gpkg
+        ├── marnet_plus_20km.gpkg
+        ├── marnet_plus_50km.gpkg
+        └── marnet_plus_100km.gpkg
 ```
 
 ## 🚀 Quick Start
 
-1. **Start the web server:**
+1. **Run the calculator:**
    ```bash
-   scripts\start_web_interface.bat
+   python searoute_calculator.py
    ```
 
-2. **Open your browser:**
+2. **Search for ports:**
    ```
-   http://localhost:8080
+   > search hamburg
+   > search shanghai
    ```
 
-3. **Calculate distances:**
-   - Select origin and destination ports
-   - Or enter custom coordinates
-   - Click "Calculate Maritime Distance"
-   - See results instantly!
+3. **Calculate distance:**
+   ```
+   > calculate
+   Enter origin port: hamburg
+   Enter destination port: shanghai
+   ```
+
+4. **Use coordinates:**
+   ```
+   > coordinates
+   Enter origin longitude: 9.99
+   Enter origin latitude: 53.55
+   Enter destination longitude: 121.8
+   Enter destination latitude: 31.2
+   ```
 
 ## ✨ Features
 
-- **🌍 12 Major World Ports** pre-loaded
-- **📍 Custom Coordinates** support
+- **🌍 3,800+ Ports Worldwide** with comprehensive database
+- **📍 Custom Coordinates** support for any location
 - **🚢 Real Maritime Routing** (uses actual shipping lanes)
-- **📊 Instant Results** with distance and accuracy info
-- **📱 Mobile-Friendly** responsive design
-- **🎨 Beautiful Interface** with modern design
+- **📊 Results in Nautical Miles** (proper maritime unit)
+- **🔍 Smart Port Search** by name, country, or region
+- **⚡ Fast Calculations** using Eurostat's SeaRoute engine
+- **🎯 Interactive Interface** with helpful commands
 
 ## 🔧 Requirements
 
 - **Java JDK 9+** (for SeaRoute engine)
-- **Python 3.6+** (for web server)
-- **Modern web browser** (Chrome, Firefox, Edge, Safari)
+- **Python 3.6+** (for the calculator)
+- **Modern terminal** (Windows PowerShell, Command Prompt, or Linux/Mac terminal)
 
 ## 📊 Example Results
 
-**Marseille → Shanghai:**
-- Maritime Distance: **16,376.9 km**
+**Hamburg → Shanghai:**
+- Maritime Distance: **8,842.8 nm** (16,376.9 km)
 - Origin Approximation: 0.72 km
 - Destination Approximation: 30.43 km
 
-## 🎯 What's Included
+## 🎯 Available Commands
 
-- ✅ **Organized folder structure** - Everything in logical folders
-- ✅ **Working web interface** - No Java knowledge needed
-- ✅ **Pre-loaded major ports** - 12 world ports ready to use
-- ✅ **Custom coordinates** - Enter any longitude/latitude
-- ✅ **Real maritime routing** - Uses actual shipping lanes, not straight lines
-- ✅ **Canal support** - Includes Panama, Suez, and other major passages
-- ✅ **Mobile responsive** - Works on phones and tablets
-- ✅ **Error handling** - Helpful error messages and troubleshooting
+- `search <query>` - Search for ports
+- `calculate` - Calculate distance between two ports
+- `coordinates` - Calculate using longitude/latitude
+- `list <country>` - List ports in a country
+- `help` - Show all commands
+- `quit` - Exit the program
 
-## 🆘 Need Help?
+## 🆘 Troubleshooting
 
-- **Setup Issues**: See `docs/SETUP_GUIDE.md`
-- **Web Interface**: See `docs/WEB_INTERFACE_GUIDE.md`
-- **Server Won't Start**: Check Java and Python installation
-- **Browser Issues**: Try http://127.0.0.1:8080
+### Java Not Found
+If you get "Java not found" error:
+1. **Install Java JDK 9+** from [Oracle](https://www.oracle.com/java/technologies/downloads/) or [OpenJDK](https://openjdk.org/)
+2. **Add Java to PATH** environment variable
+3. **Or run:** `$env:PATH += ";C:\Program Files\Java\jdk-XX\bin"` (Windows)
+
+### Port Database Issues
+- Ensure `web-interface/port_calculator.html` exists
+- The script automatically loads ports from this file
+
+### SeaRoute Engine Issues
+- Ensure `searoute-engine/searoute.jar` exists
+- Check that Java can run the JAR file
+
+## 🌊 About SeaRoute
+
+This calculator uses **Eurostat's SeaRoute** - the official maritime routing engine that:
+- ✅ **Follows actual shipping lanes** (not straight lines)
+- ✅ **Includes major canals** (Panama, Suez, etc.)
+- ✅ **Accounts for land masses** and navigation constraints
+- ✅ **Provides accurate distances** for maritime planning
+
+## 🎓 CE492 Project
+
+This is part of the **CE492 EU-ETS Maritime Compliance Cost Estimator** project at Boğaziçi University. The standalone calculator provides the foundation for maritime distance calculations that will be extended with EU-ETS compliance cost estimation features.
+
+## 📄 License
+
+This project is licensed under the same terms as the original SeaRoute project.
 
 ---
 
-**Ready to calculate maritime distances? Just run `scripts\start_web_interface.bat` and start exploring!** 🚢
+**Ready to calculate maritime distances? Just run `python searoute_calculator.py` and start exploring!** 🚢
