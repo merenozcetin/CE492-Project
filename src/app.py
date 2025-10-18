@@ -772,11 +772,18 @@ with tab1:
                     total_cost_2024 = emission_result.ets_costs.get(2024, 0)
                     total_cost_2030 = emission_result.ets_costs.get(2030, 0)
                     
+                    # Calculate cost increase percentage, handling zero costs
+                    if total_cost_2024 > 0:
+                        cost_increase_pct = ((total_cost_2030/total_cost_2024 - 1) * 100)
+                        cost_increase_text = f"Cost increase: {cost_increase_pct:.1f}% over 6 years"
+                    else:
+                        cost_increase_text = "No costs due to 0% coverage (non-EEA route)"
+                    
                     st.markdown(f'''
                     <div class="cost-highlight">
                         <h3>Cost Projection</h3>
                         <p><strong>2024:</strong> €{total_cost_2024:,.0f} | <strong>2030:</strong> €{total_cost_2030:,.0f}</p>
-                        <p>Cost increase: {((total_cost_2030/total_cost_2024 - 1) * 100):.1f}% over 6 years</p>
+                        <p>{cost_increase_text}</p>
                     </div>
                     ''', unsafe_allow_html=True)
                     
