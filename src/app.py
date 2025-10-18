@@ -78,8 +78,30 @@ class SeaRouteCalculator:
         """Load MRV ship data from CSV file"""
         try:
             import csv
+            import os
             
-            with open('data/mrv_data.csv', 'r', encoding='utf-8') as f:
+            # Try multiple possible paths for the MRV data file
+            possible_paths = [
+                'data/mrv_data.csv',
+                './data/mrv_data.csv',
+                '../data/mrv_data.csv',
+                os.path.join(os.path.dirname(__file__), '..', 'data', 'mrv_data.csv'),
+                os.path.join(os.getcwd(), 'data', 'mrv_data.csv')
+            ]
+            
+            mrv_file_path = None
+            for path in possible_paths:
+                if os.path.exists(path):
+                    mrv_file_path = path
+                    break
+            
+            if not mrv_file_path:
+                print(f"❌ MRV data file not found. Tried paths: {possible_paths}")
+                return
+            
+            print(f"📁 Loading MRV data from: {mrv_file_path}")
+            
+            with open(mrv_file_path, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     # Skip rows with "Division by zero!" errors
@@ -247,6 +269,13 @@ with st.sidebar:
         st.write(f"Data file exists: {os.path.exists('data/ports.json')}")
         if os.path.exists('data/ports.json'):
             st.write(f"Data file size: {os.path.getsize('data/ports.json')} bytes")
+    
+    if len(calculator.mrv_ships) == 0:
+        st.error("❌ No MRV ships loaded!")
+        st.write("**MRV Debug Info:**")
+        st.write(f"MRV file exists: {os.path.exists('data/mrv_data.csv')}")
+        if os.path.exists('data/mrv_data.csv'):
+            st.write(f"MRV file size: {os.path.getsize('data/mrv_data.csv')} bytes")
     else:
         st.success("✅ SeaRoute engine ready")
     
