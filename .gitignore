@@ -1,24 +1,23 @@
-# Compiled class file
-*.class
-
-# Log file
-*.log
-
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
-
-/target/
-/.settings/
-.classpath
-.project
-.factorypath
-
-# Web interface temporary files
-temp_input.csv
-out.geojson
-*.geojson
-
 # Python cache
 __pycache__/
 *.pyc
 *.pyo
+*.pyc
+
+# Log files
+*.log
+
+# Temporary files
+temp_input.csv
+out.geojson
+*.geojson
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
