@@ -32,13 +32,24 @@ class SeaRouteCalculator:
         self.ports = []
         self._load_ports()
     
-    @st.cache_data
-    def _load_ports(_self):
+    def _load_ports(self):
         """Load port database from ports.json"""
-        ports_file = 'data/ports.json'
+        # Try multiple possible locations for the ports file
+        possible_paths = [
+            'data/ports.json',
+            './data/ports.json',
+            '../data/ports.json',
+            'ports.json'
+        ]
         
-        if not os.path.exists(ports_file):
-            st.error(f"❌ Port data not found: {ports_file}")
+        ports_file = None
+        for path in possible_paths:
+            if os.path.exists(path):
+                ports_file = path
+                break
+        
+        if not ports_file:
+            print(f"❌ Port data not found in any of these locations: {possible_paths}")
             return
         
         try:
@@ -54,12 +65,12 @@ class SeaRouteCalculator:
                     lat=port_data['lat'],
                     alternate=port_data.get('alternate')
                 )
-                _self.ports.append(port)
+                self.ports.append(port)
             
-            st.success(f"✅ Loaded {len(_self.ports)} ports")
+            print(f"✅ Loaded {len(self.ports)} ports from {ports_file}")
             
         except Exception as e:
-            st.error(f"❌ Error loading ports: {e}")
+            print(f"❌ Error loading ports: {e}")
     
     def search_ports(self, query: str, limit: int = 10) -> List[Port]:
         """Search ports by name, country, or region"""
@@ -123,16 +134,28 @@ st.title("🌊 SeaRoute Maritime Distance Calculator")
 st.markdown("Calculate maritime distances between ports worldwide using the Python SeaRoute wrapper")
 
 # Initialize calculator
-if 'calculator' not in st.session_state:
-    st.session_state.calculator = SeaRouteCalculator()
+@st.cache_resource
+def get_calculator():
+    """Get cached calculator instance"""
+    return SeaRouteCalculator()
 
-calculator = st.session_state.calculator
+calculator = get_calculator()
 
 # Sidebar info
 with st.sidebar:
     st.header("ℹ️ About")
     st.info(f"**{len(calculator.ports)} ports** loaded from database")
-    st.success("✅ SeaRoute engine ready")
+    
+    # Debug info
+    if len(calculator.ports) == 0:
+        st.error("❌ No ports loaded!")
+        st.write("**Debug Info:**")
+        st.write(f"Current directory: {os.getcwd()}")
+        st.write(f"Data file exists: {os.path.exists('data/ports.json')}")
+        if os.path.exists('data/ports.json'):
+            st.write(f"Data file size: {os.path.getsize('data/ports.json')} bytes")
+    else:
+        st.success("✅ SeaRoute engine ready")
     
     st.header("🔧 Requirements")
     st.markdown("""
