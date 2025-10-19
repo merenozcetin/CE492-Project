@@ -1,4 +1,4 @@
-# EU ETS Maritime Compliance Cost Estimator
+# 🇪🇺 EU ETS Maritime Compliance Cost Estimator
 
 An open-source EU Emissions Trading System (ETS) cost estimator for maritime voyages, implementing **Method A: MRV-Intensity Estimator** as part of the CE492 Undergraduate Thesis Project at Boğaziçi University.
 
@@ -9,7 +9,7 @@ searoute-master/
 ├── src/
 │   └── app.py                    # Main Streamlit application
 ├── data/
-│   ├── ports.json               # Port database (3,800+ ports)
+│   ├── ports.json               # Port database (13,951 ports)
 │   ├── mrv_data.csv             # MRV ship emissions data
 │   └── ets_price.csv            # EUA price data by year
 ├── docs/
@@ -24,7 +24,6 @@ searoute-master/
 ### 📋 Data Classes
 
 #### `Port` Class
-
 ```python
 @dataclass
 class Port:
@@ -39,7 +38,6 @@ class Port:
 ```
 
 #### `MRVShip` Class
-
 ```python
 @dataclass
 class MRVShip:
@@ -50,7 +48,6 @@ class MRVShip:
 ```
 
 #### `ETSPrices` Class
-
 ```python
 @dataclass
 class ETSPrices:
@@ -60,7 +57,6 @@ class ETSPrices:
 ```
 
 #### `EmissionResult` Class
-
 ```python
 @dataclass
 class EmissionResult:
@@ -76,45 +72,43 @@ class EmissionResult:
 ### 🧮 Core Calculator Class
 
 #### `SeaRouteCalculator` Class
-
 The main calculator class that implements **Method A: MRV-Intensity Estimator** for EU-ETS compliance cost calculation.
 
 **Key Methods:**
 
 1. **`__init__(self)`**
-
    - Initializes ports, MRV ships, and ETS prices lists
    - Loads all required data files
    - Sets up the calculator for EU-ETS calculations
-2. **`_load_ports(self)`**
 
+2. **`_load_ports(self)`**
    - Loads port database from `data/ports.json`
    - Creates `Port` objects with EEA status
    - Handles file loading errors gracefully
-3. **`_load_mrv_data(self)`**
 
+3. **`_load_mrv_data(self)`**
    - Loads MRV ship emissions data from `data/mrv_data.csv`
    - Creates `MRVShip` objects with CO₂ and CO₂eq per nautical mile
    - Handles BOM encoding and data validation
-4. **`_load_ets_prices(self)`**
 
+4. **`_load_ets_prices(self)`**
    - Loads EUA price data from `data/ets_price.csv`
    - Creates `ETSPrices` objects for cost calculations
    - Supports historical and projected prices
-5. **`calculate_distance(self, origin_lon, origin_lat, dest_lon, dest_lat)`**
 
+5. **`calculate_distance(self, origin_lon, origin_lat, dest_lon, dest_lat)`**
    - Calculates maritime distance using SeaRoute wrapper
    - Returns distance in both km and nautical miles
    - Includes debug logging and fallback calculations
-6. **`calculate_emissions(self, imo_number, origin_port, dest_port)`**
 
+6. **`calculate_emissions(self, imo_number, origin_port, dest_port)`**
    - **Core Method A implementation**: MRV-intensity estimator
    - Calculates CO₂ and CO₂eq emissions based on MRV data
    - Applies EU-ETS coverage rules (100%/50%/0%)
    - Calculates ETS costs with phase-in schedules
    - Returns complete `EmissionResult` object
-7. **`_calculate_ets_costs(self, co2_emissions, co2eq_emissions, origin_port, dest_port)`**
 
+7. **`_calculate_ets_costs(self, co2_emissions, co2eq_emissions, origin_port, dest_port)`**
    - Applies EU-ETS policy rules:
      - **Coverage**: 100% intra-EEA, 50% extra-EEA, 0% out-of-scope
      - **Phase-in**: 40% (2024), 70% (2025), 100% (2026+)
@@ -124,7 +118,6 @@ The main calculator class that implements **Method A: MRV-Intensity Estimator** 
 ### 🎨 Streamlit UI Components
 
 #### Main Application Structure
-
 ```python
 # Page configuration
 st.set_page_config(
@@ -142,7 +135,6 @@ tab1, tab2 = st.tabs(["🚢 MRV Emissions", "📍 Port-to-Port"])
 ```
 
 #### Tab 1: MRV Emissions (Method A Implementation)
-
 - **IMO Number Input**: Ship identification for MRV data lookup
 - **Ship Data Display**: CO₂ and CO₂eq per nautical mile from MRV database
 - **Port Selection**: Origin and destination port dropdowns
@@ -154,7 +146,6 @@ tab1, tab2 = st.tabs(["🚢 MRV Emissions", "📍 Port-to-Port"])
   - Cost projection from 2024 to 2030
 
 #### Tab 2: Port-to-Port Distance
-
 - **Port Selection**: Origin and destination port dropdowns
 - **Distance Calculation**: Maritime distance calculation
 - **Results Display**: Distance in nautical miles and kilometers
@@ -186,34 +177,34 @@ tab1, tab2 = st.tabs(["🚢 MRV Emissions", "📍 Port-to-Port"])
 - **File Loading**: Graceful handling of missing files
 - **SeaRoute Errors**: Debug logging and fallback calculations
 - **User Input**: Validation and error messages
+- **MRV Data**: BOM handling and data validation
+- **Division by Zero**: Proper handling of edge cases
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-
 - Python 3.8+
 - pip
 
 ### Installation
 
 1. **Clone the repository**
-
    ```bash
    git clone <your-repo-url>
    cd searoute-master
    ```
-2. **Install dependencies**
 
+2. **Install dependencies**
    ```bash
    pip install -r requirements.txt
    ```
-3. **Run the Streamlit application**
 
+3. **Run the Streamlit application**
    ```bash
    streamlit run src/app.py
    ```
-4. **Open your browser**
 
+4. **Open your browser**
    ```
    http://localhost:8501
    ```
@@ -221,7 +212,6 @@ tab1, tab2 = st.tabs(["🚢 MRV Emissions", "📍 Port-to-Port"])
 ## 🌊 Usage Guide
 
 ### MRV Emissions Calculation (Method A)
-
 1. Go to the **MRV Emissions** tab
 2. Enter ship IMO number (e.g., "1234567")
 3. Select origin port from dropdown
@@ -234,18 +224,16 @@ tab1, tab2 = st.tabs(["🚢 MRV Emissions", "📍 Port-to-Port"])
    - Coverage analysis and cost projections
 
 ### Port-to-Port Distance Calculation
-
 1. Go to the **Port-to-Port** tab
 2. Select origin port from dropdown
 3. Select destination port from dropdown
 4. Click **Calculate Distance**
 5. View maritime distance in nautical miles and kilometers
 
-
 ## 📊 Data Sources
 
 ### Port Database
-The application includes **3,800+ ports** worldwide with:
+The application includes **13,951 ports** worldwide with:
 - Port names and alternate names
 - Country and region information
 - Precise coordinates (longitude/latitude)
@@ -264,15 +252,15 @@ The application includes **3,800+ ports** worldwide with:
 - **Currency**: EUR per tonne CO₂/CO₂eq
 
 ### Port Data Format
-
 ```json
 {
   "name": "Hamburg",
-  "country": "Germany",
+  "country": "DE",
   "region": "Europe",
   "lon": 9.9937,
   "lat": 53.5511,
-  "alternate": "Hamburg Port"
+  "alternate": null,
+  "is_eea": true
 }
 ```
 
@@ -313,59 +301,228 @@ This application implements **Method A: MRV-Intensity Estimator** from the CE492
 - **AIS Data Integration** - Optional enhancement for real-time tracking
 - **CH4/N2O Accounting** - Ready for 2026+ regulatory requirements
 
-## 🚀 Deployment
+## 🛠️ Development Guide
 
-### Local Development
+### Setup Development Environment
 
-```bash
-streamlit run src/app.py
-```
+1. **Clone the repository**
+   ```bash
+   git clone <your-repo-url>
+   cd searoute-master
+   ```
 
-### Streamlit Cloud
+2. **Create virtual environment (recommended)**
+   ```bash
+   python -m venv venv
+   
+   # On Windows
+   venv\Scripts\activate
+   
+   # On macOS/Linux
+   source venv/bin/activate
+   ```
 
-1. Push your code to GitHub
-2. Go to [share.streamlit.io](https://share.streamlit.io)
-3. Connect your GitHub repository
-4. Set main file to `src/app.py`
-5. Deploy!
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-### Other Cloud Platforms
+4. **Run the application**
+   ```bash
+   streamlit run src/app.py
+   ```
 
-The app is ready for deployment on:
+### Development Workflow
 
-- **Heroku** - Add `Procfile` with `web: streamlit run src/app.py --server.port=$PORT --server.address=0.0.0.0`
-- **Railway** - Automatic detection
-- **DigitalOcean** - App Platform
+#### Making Changes
+1. **Edit the main application**
+   - Modify `src/app.py` for UI changes
+   - Update port data in `data/ports.json`
+   - Add new features or calculations
+
+2. **Test your changes**
+   ```bash
+   streamlit run src/app.py
+   ```
+
+3. **Commit your changes**
+   ```bash
+   git add .
+   git commit -m "Description of changes"
+   git push origin master
+   ```
+
+### Code Organization
+
+#### Main Application (`src/app.py`)
+- **Data Classes**: `Port`, `MRVShip`, `ETSPrices`, `EmissionResult` dataclasses
+- **Calculator Class**: `SeaRouteCalculator` for EU-ETS calculations
+- **UI Components**: Streamlit interface with tabs and forms
+- **Error Handling**: Graceful error handling and user feedback
+
+#### Data Files (`data/`)
+- **Port Database**: JSON file with port information and EEA status
+- **MRV Data**: CSV file with ship emissions data
+- **ETS Prices**: CSV file with EUA price projections
+- **Format**: Standardized data structures for easy updates
+
+## 🧪 Testing
+
+### Manual Testing
+1. **Port Loading**: Check if ports load correctly on startup
+2. **MRV Data Loading**: Verify ship data loads from CSV
+3. **Port Selection**: Test dropdown functionality
+4. **Emission Calculation**: Test with known ship/port combinations
+5. **ETS Cost Calculation**: Verify cost calculations by year
+6. **Error Handling**: Test with invalid inputs
+
+### Test Cases
+- **MRV Emissions**: Test with valid IMO numbers
+- **Distance Calculation**: Test with known port pairs
+- **ETS Costs**: Verify phase-in schedules and coverage rules
+- **Error Scenarios**: Test with missing data or invalid inputs
+
+### Debug Features
+- Console logging for SeaRoute results
+- Error messages in UI
+- Debug information in sidebar
+- File existence and size checks
 
 ## 🐛 Debugging
 
 ### Common Issues
 
-1. **SeaRoute 'length' error**: The app includes debug logging and fallback calculations
-2. **Port loading issues**: Check if `data/ports.json` exists and is valid
-3. **Dependencies**: Ensure all packages are installed with `pip install -r requirements.txt`
+#### 1. Port Loading Errors
+```python
+# Check if file exists
+if not os.path.exists('data/ports.json'):
+    print("❌ Port data file not found!")
+```
 
-### Debug Features
+#### 2. MRV Data Loading Errors
+```python
+# Check CSV file and encoding
+with open('data/mrv_data.csv', 'r', encoding='utf-8-sig') as f:
+    # Handle BOM and data validation
+```
 
-- Console logging for SeaRoute results
-- Error handling with fallback calculations
-- File existence checks
-- Data validation
+#### 3. SeaRoute Calculation Errors
+```python
+# Debug SeaRoute result
+print(f"Route result: {route}")
+print(f"Route type: {type(route)}")
+```
 
-## 📝 License
+#### 4. Dependency Issues
+```bash
+# Check installed packages
+pip list | grep streamlit
+pip list | grep searoute
+pip list | grep pandas
+```
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+### Debug Tools
+- **Console Output**: Print statements for debugging
+- **Streamlit Debug**: Built-in error messages
+- **File Validation**: Check data file integrity
+- **Sidebar Debug Info**: Real-time status information
+
+## 🚀 Deployment
+
+### Local Development
+```bash
+streamlit run src/app.py
+```
+
+### Streamlit Cloud
+1. Push to GitHub
+2. Connect repository to Streamlit Cloud
+3. Set main file to `src/app.py`
+4. Deploy automatically
+
+### Other Platforms
+- **Heroku**: Add Procfile with `web: streamlit run src/app.py --server.port=$PORT --server.address=0.0.0.0`
+- **Railway**: Automatic detection
+- **DigitalOcean**: App Platform
+
+## 📈 Performance Optimization
+
+### Data Loading
+- Ports loaded once at startup
+- MRV data cached in memory
+- ETS prices loaded once
+- Efficient search through in-memory data
+
+### UI Responsiveness
+- Immediate user feedback
+- Loading indicators for calculations
+- Error handling with clear messages
+- Theme-aware styling
+
+### Calculation Efficiency
+- SeaRoute wrapper optimization
+- Fallback calculations for reliability
+- Efficient EU-ETS cost calculations
+- Cached results where possible
+
+## 🔄 Version Control
+
+### Git Workflow
+1. **Feature Branch**: Create branch for new features
+2. **Development**: Make changes and test
+3. **Commit**: Commit with descriptive messages
+4. **Push**: Push to remote repository
+5. **Merge**: Merge to main branch
+
+### Commit Messages
+- Use descriptive commit messages
+- Include issue numbers if applicable
+- Follow conventional commit format
+- Document major changes
+
+## 📝 Code Style
+
+### Python Style
+- Follow PEP 8 guidelines
+- Use type hints where possible
+- Write docstrings for functions
+- Use meaningful variable names
+
+### Streamlit Best Practices
+- Use columns for layout
+- Provide user feedback
+- Handle errors gracefully
+- Keep UI responsive
+- Theme-aware styling
 
 ## 🤝 Contributing
 
+### Before Contributing
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Submit a pull request
+4. Test thoroughly
+5. Submit a pull request
+
+### Code Review Process
+1. Automated checks pass
+2. Manual code review
+3. Testing verification
+4. Documentation updates
 
 ## 📞 Support
 
-For questions or issues, please open an issue on GitHub.
+### Getting Help
+- Check the documentation first
+- Look at existing issues
+- Create a new issue if needed
+- Provide detailed error information
+
+### Reporting Issues
+- Include error messages
+- Describe steps to reproduce
+- Provide system information
+- Include relevant code snippets
 
 ---
 
