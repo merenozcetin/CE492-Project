@@ -396,7 +396,7 @@ class SeaRouteCalculator:
 
 # Page configuration
 st.set_page_config(
-    page_title="ETS Price Calculator",
+    page_title="🇪🇺 ETS Cost Calculator",
     page_icon="🇪🇺",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -549,7 +549,7 @@ st.markdown("""
 # Enhanced Header
 st.markdown("""
 <div class="main-header">
-    <h1>🇪🇺 ETS Price Calculator</h1>
+    <h1>🇪🇺 ETS Cost Calculator</h1>
     <p>Calculate maritime distances and CO₂ emissions for ships worldwide</p>
 </div>
 """, unsafe_allow_html=True)
@@ -766,7 +766,51 @@ with tab1:
         
         dest_options = ["Select destination port..."] + dest_options
         
-        dest_choice = st.selectbox("Choose destination port:", dest_options, key="mrv_dest_select", index=0)
+        # Unified port search for both origin and destination
+        st.write("**Port Search**")
+        port_search = st.text_input(
+            "Search ports:",
+            placeholder="e.g., 'Hamburg', 'TR', 'Turkey', 'Europe'",
+            key="unified_port_search",
+            help="Type to search by port name, country code, or region. This will filter both origin and destination port dropdowns."
+        )
+        
+        # Filter ports based on unified search
+        if port_search and len(port_search.strip()) >= 2:
+            search_query = port_search.strip().lower()
+            filtered_ports = []
+            for port in calculator.ports:
+                country_str = str(port.country) if port.country is not None else ""
+                if (search_query in port.name.lower() or 
+                    search_query.upper() == country_str.upper() or
+                    search_query in country_str.lower() or
+                    search_query in port.region.lower()):
+                    filtered_ports.append(port)
+            
+            # Sort: exact country matches first, then port names
+            def sort_key(port):
+                country_str = str(port.country) if port.country is not None else ""
+                if search_query.upper() == country_str.upper():
+                    return (0, port.name)
+                elif search_query in port.name.lower():
+                    return (1, port.name)
+                else:
+                    return (2, port.name)
+            
+            filtered_ports.sort(key=sort_key)
+            port_options = [f"{p.name} ({p.country})" for p in filtered_ports[:50]]  # Limit to 50 results
+        else:
+            port_options = [f"{p.name} ({p.country})" for p in calculator.ports]
+        
+        port_options = ["Select port..."] + port_options
+        
+        # Origin port selection
+        st.write("**Origin Port**")
+        origin_choice = st.selectbox("Choose origin port:", port_options, key="mrv_origin_select", index=0)
+        
+        # Destination port selection  
+        st.write("**Destination Port**")
+        dest_choice = st.selectbox("Choose destination port:", port_options, key="mrv_dest_select", index=0)
         
         if dest_choice and dest_choice != "Select destination port...":
             for port in calculator.ports:
@@ -1246,4 +1290,4 @@ with tab3:
 
 # Footer
 st.markdown("---")
-st.markdown("**ETS Price Calculator** - Powered by Python SeaRoute wrapper")
+st.markdown("**ETS Cost Calculator** - Powered by Python SeaRoute wrapper")
