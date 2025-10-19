@@ -670,18 +670,20 @@ with tab1:
     with col2:
         st.subheader("💰 ETS Cost Calculator")
         
-        # Unified port search for both origin and destination
-        st.write("**Port Search**")
-        port_search = st.text_input(
-            "Search ports:",
-            placeholder="e.g., 'Hamburg', 'TR', 'Turkey', 'Europe'",
-            key="unified_port_search",
-            help="Type to search by port name, country code, or region. This will filter both origin and destination port dropdowns."
+        # Origin port selection with search functionality
+        st.write("**Origin Port**")
+        
+        # Search input for origin port
+        origin_search = st.text_input(
+            "Search origin port:",
+            placeholder="e.g., 'Hamburg', 'TR', 'Turkey'",
+            key="origin_search",
+            help="Type to search by port name, country code, or country name"
         )
         
-        # Filter ports based on unified search
-        if port_search and len(port_search.strip()) >= 2:
-            search_query = port_search.strip().lower()
+        # Filter ports based on search
+        if origin_search and len(origin_search.strip()) >= 2:
+            search_query = origin_search.strip().lower()
             filtered_ports = []
             for port in calculator.ports:
                 country_str = str(port.country) if port.country is not None else ""
@@ -702,17 +704,15 @@ with tab1:
                     return (2, port.name)
             
             filtered_ports.sort(key=sort_key)
-            port_options = [f"{p.name} ({p.country})" for p in filtered_ports[:50]]  # Limit to 50 results
+            origin_options = [f"{p.name} ({p.country})" for p in filtered_ports[:50]]  # Limit to 50 results
         else:
-            port_options = [f"{p.name} ({p.country})" for p in calculator.ports]
+            origin_options = [f"{p.name} ({p.country})" for p in calculator.ports]
         
-        port_options = ["Select port..."] + port_options
+        origin_options = ["Select origin port..."] + origin_options
         
-        # Origin port selection
-        st.write("**Origin Port**")
-        origin_choice = st.selectbox("Choose origin port:", port_options, key="mrv_origin_select", index=0)
+        origin_choice = st.selectbox("Choose origin port:", origin_options, key="mrv_origin_select", index=0)
         
-        if origin_choice and origin_choice != "Select port...":
+        if origin_choice and origin_choice != "Select origin port...":
             for port in calculator.ports:
                 if f"{port.name} ({port.country})" == origin_choice:
                     mrv_origin_port = port
@@ -726,11 +726,49 @@ with tab1:
             st.success(f"✅ **{mrv_origin_port.name}** ({mrv_origin_port.country})")
             st.info(f"📍 Coordinates: {mrv_origin_port.lat:.2f}°N, {mrv_origin_port.lon:.2f}°E")
         
-        # Destination port selection  
+        # Destination port selection with search functionality
         st.write("**Destination Port**")
-        dest_choice = st.selectbox("Choose destination port:", port_options, key="mrv_dest_select", index=0)
         
-        if dest_choice and dest_choice != "Select port...":
+        # Search input for destination port
+        dest_search = st.text_input(
+            "Search destination port:",
+            placeholder="e.g., 'Shanghai', 'CN', 'China'",
+            key="dest_search",
+            help="Type to search by port name, country code, or country name"
+        )
+        
+        # Filter ports based on search
+        if dest_search and len(dest_search.strip()) >= 2:
+            search_query = dest_search.strip().lower()
+            filtered_ports = []
+            for port in calculator.ports:
+                country_str = str(port.country) if port.country is not None else ""
+                if (search_query in port.name.lower() or 
+                    search_query.upper() == country_str.upper() or
+                    search_query in country_str.lower() or
+                    search_query in port.region.lower()):
+                    filtered_ports.append(port)
+            
+            # Sort: exact country matches first, then port names
+            def sort_key(port):
+                country_str = str(port.country) if port.country is not None else ""
+                if search_query.upper() == country_str.upper():
+                    return (0, port.name)
+                elif search_query in port.name.lower():
+                    return (1, port.name)
+                else:
+                    return (2, port.name)
+            
+            filtered_ports.sort(key=sort_key)
+            dest_options = [f"{p.name} ({p.country})" for p in filtered_ports[:50]]  # Limit to 50 results
+        else:
+            dest_options = [f"{p.name} ({p.country})" for p in calculator.ports]
+        
+        dest_options = ["Select destination port..."] + dest_options
+        
+        dest_choice = st.selectbox("Choose destination port:", dest_options, key="mrv_dest_select", index=0)
+        
+        if dest_choice and dest_choice != "Select destination port...":
             for port in calculator.ports:
                 if f"{port.name} ({port.country})" == dest_choice:
                     mrv_dest_port = port
@@ -1041,14 +1079,14 @@ with tab2:
                     
                     with col1:
                         st.markdown('<div class="port-card">', unsafe_allow_html=True)
-                        st.write(f"**From:** {origin_port.name} ({origin_port.country})")
+                    st.write(f"**From:** {origin_port.name} ({origin_port.country})")
                         st.write(f"📍 Coordinates: {origin_port.lat:.2f}°N, {origin_port.lon:.2f}°E")
                         st.write(f"🇪🇺 EEA Status: {'Yes' if origin_port.is_eea else 'No'}")
                         st.markdown('</div>', unsafe_allow_html=True)
                     
                     with col2:
                         st.markdown('<div class="port-card">', unsafe_allow_html=True)
-                        st.write(f"**To:** {dest_port.name} ({dest_port.country})")
+                    st.write(f"**To:** {dest_port.name} ({dest_port.country})")
                         st.write(f"📍 Coordinates: {dest_port.lat:.2f}°N, {dest_port.lon:.2f}°E")
                         st.write(f"🇪🇺 EEA Status: {'Yes' if dest_port.is_eea else 'No'}")
                         st.markdown('</div>', unsafe_allow_html=True)
@@ -1150,8 +1188,8 @@ with tab3:
                         
                         with col1:
                             st.metric("Total Results", len(matches))
-                        
-                        with col2:
+                
+                with col2:
                             eea_count = sum(1 for p in matches if p.is_eea)
                             st.metric("EEA Ports", eea_count)
                 
@@ -1176,8 +1214,8 @@ with tab3:
                     # Display top 10 countries
                     for country, count in sorted_countries[:10]:
                         st.write(f"**{country}**: {count} ports")
-        
-        else:
+                
+            else:
             st.warning(f"❌ No ports found matching '{search_query}'")
             st.info("💡 Try searching with:")
             st.write("- Port names (e.g., 'Hamburg', 'Rotterdam')")
