@@ -212,20 +212,44 @@ class SeaRouteCalculator:
             traceback.print_exc()
     
     def search_ports(self, query: str, limit: int = 10) -> List[Port]:
-        """Search ports by name, country, or region"""
+        """Search ports by name, country, or region with enhanced country code support"""
         if not query or len(query) < 2:
             return []
             
-        query = query.lower()
+        query = query.strip().lower()
         matches = []
         
         for port in self.ports:
-            if (query in port.name.lower() or 
-                query in port.country.lower() or 
-                query in port.region.lower() or
-                (port.alternate and query in port.alternate.lower())):
+            # Convert country to string and handle None values
+            country_str = str(port.country) if port.country is not None else ""
+            
+            # Exact country code match (case insensitive)
+            if query.upper() == country_str.upper():
+                matches.append(port)
+            # Port name match
+            elif query in port.name.lower():
+                matches.append(port)
+            # Country name match (if we had country names)
+            elif query in country_str.lower():
+                matches.append(port)
+            # Region match
+            elif query in port.region.lower():
+                matches.append(port)
+            # Alternate name match
+            elif port.alternate and query in port.alternate.lower():
                 matches.append(port)
         
+        # Sort matches: exact country code matches first, then others
+        def sort_key(port):
+            country_str = str(port.country) if port.country is not None else ""
+            if query.upper() == country_str.upper():
+                return (0, port.name)  # Country code matches first
+            elif query in port.name.lower():
+                return (1, port.name)  # Port name matches second
+            else:
+                return (2, port.name)  # Other matches last
+        
+        matches.sort(key=sort_key)
         return matches[:limit]
     
     def calculate_distance(self, origin_lon: float, origin_lat: float, 
@@ -587,8 +611,8 @@ with st.sidebar:
     - searoute package
     """)
 
-# Main tabs - Simplified interface with MRV Emissions first
-tab1, tab2 = st.tabs(["🌍 MRV Emissions", "🚢 Port-to-Port"])
+# Main tabs - Enhanced interface with search functionality
+tab1, tab2, tab3 = st.tabs(["🌍 MRV Emissions", "🚢 Port-to-Port", "🔍 Port Search"])
 
 with tab1:
     st.markdown('<div class="tab-container">', unsafe_allow_html=True)
@@ -1010,6 +1034,143 @@ with tab2:
                     st.error(f"❌ Calculation failed: {distance_result['error']}")
         else:
             st.warning("Please select both origin and destination ports")
+    
+    st.markdown('</div>', unsafe_allow_html=True)  # Close tab-container
+
+with tab3:
+    st.markdown('<div class="tab-container">', unsafe_allow_html=True)
+    
+    st.header("🔍 Port Search")
+    st.markdown("Search ports by name, country code, or region")
+    
+    # Search input
+    search_query = st.text_input(
+        "Search ports:",
+        placeholder="e.g., 'Hamburg', 'TR', 'Turkey', 'Europe'",
+        help="Search by port name, country code (e.g., TR, DE, US), country name, or region"
+    )
+    
+    # Search options
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        search_limit = st.slider("Maximum results:", min_value=5, max_value=100, value=20)
+    
+    with col2:
+        search_type = st.selectbox(
+            "Search type:",
+            ["All", "Port Name", "Country Code", "Country Name", "Region"],
+            help="Filter search results by type"
+        )
+    
+    # Search button
+    if st.button("🔍 Search Ports", type="primary"):
+        if search_query and len(search_query.strip()) >= 2:
+            with st.spinner("Searching ports..."):
+                # Get all matching ports
+                all_matches = calculator.search_ports(search_query.strip(), limit=1000)
+                
+                # Filter by search type if specified
+                if search_type == "Port Name":
+                    matches = [p for p in all_matches if search_query.lower() in p.name.lower()]
+                elif search_type == "Country Code":
+                    matches = [p for p in all_matches if search_query.upper() == p.country]
+                elif search_type == "Country Name":
+                    # This would need a country code to name mapping
+                    matches = [p for p in all_matches if search_query.lower() in p.country.lower()]
+                elif search_type == "Region":
+                    matches = [p for p in all_matches if search_query.lower() in p.region.lower()]
+                else:  # All
+                    matches = all_matches
+                
+                # Limit results
+                matches = matches[:search_limit]
+                
+                if matches:
+                    st.success(f"✅ Found {len(matches)} ports matching '{search_query}'")
+                    
+                    # Display results in a table
+                    st.subheader("📋 Search Results")
+                    
+                    # Create data for the table
+                    search_data = []
+                    for port in matches:
+                        search_data.append({
+                            "Port Name": port.name,
+                            "Country": port.country,
+                            "Region": port.region,
+                            "Latitude": f"{port.lat:.4f}°",
+                            "Longitude": f"{port.lon:.4f}°",
+                            "EEA Status": "✅ Yes" if port.is_eea else "❌ No"
+                        })
+                    
+                    # Display as a dataframe
+                    df = st.dataframe(
+                        search_data,
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                    
+                    # Show summary statistics
+                    if matches:
+                        st.subheader("📊 Search Summary")
+                        col1, col2, col3, col4 = st.columns(4)
+                        
+                        with col1:
+                            st.metric("Total Results", len(matches))
+                        
+                        with col2:
+                            eea_count = sum(1 for p in matches if p.is_eea)
+                            st.metric("EEA Ports", eea_count)
+                        
+                        with col3:
+                            regions = set(p.region for p in matches)
+                            st.metric("Regions", len(regions))
+                        
+                        with col4:
+                            countries = set(p.country for p in matches)
+                            st.metric("Countries", len(countries))
+                        
+                        # Show top countries
+                        if countries:
+                            st.subheader("🌍 Countries Found")
+                            country_counts = {}
+                            for port in matches:
+                                country_counts[port.country] = country_counts.get(port.country, 0) + 1
+                            
+                            # Sort by count
+                            sorted_countries = sorted(country_counts.items(), key=lambda x: x[1], reverse=True)
+                            
+                            # Display top 10 countries
+                            for country, count in sorted_countries[:10]:
+                                st.write(f"**{country}**: {count} ports")
+                
+                else:
+                    st.warning(f"❌ No ports found matching '{search_query}'")
+                    st.info("💡 Try searching with:")
+                    st.write("- Port names (e.g., 'Hamburg', 'Rotterdam')")
+                    st.write("- Country codes (e.g., 'TR', 'DE', 'US')")
+                    st.write("- Regions (e.g., 'Europe', 'Asia', 'North America')")
+        
+        else:
+            st.warning("Please enter at least 2 characters to search")
+    
+    # Show some example searches
+    st.subheader("💡 Search Examples")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.write("**By Country Code:**")
+        st.code("TR    # Turkish ports\nDE    # German ports\nUS    # US ports")
+    
+    with col2:
+        st.write("**By Port Name:**")
+        st.code("Hamburg\nRotterdam\nShanghai")
+    
+    with col3:
+        st.write("**By Region:**")
+        st.code("Europe\nAsia\nNorth America")
     
     st.markdown('</div>', unsafe_allow_html=True)  # Close tab-container
 
