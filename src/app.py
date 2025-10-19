@@ -1123,14 +1123,14 @@ with tab2:
                     
                     with col1:
                         st.markdown('<div class="port-card">', unsafe_allow_html=True)
-                    st.write(f"**From:** {origin_port.name} ({origin_port.country})")
+                        st.write(f"**From:** {origin_port.name} ({origin_port.country})")
                         st.write(f"📍 Coordinates: {origin_port.lat:.2f}°N, {origin_port.lon:.2f}°E")
                         st.write(f"🇪🇺 EEA Status: {'Yes' if origin_port.is_eea else 'No'}")
                         st.markdown('</div>', unsafe_allow_html=True)
                     
                     with col2:
                         st.markdown('<div class="port-card">', unsafe_allow_html=True)
-                    st.write(f"**To:** {dest_port.name} ({dest_port.country})")
+                        st.write(f"**To:** {dest_port.name} ({dest_port.country})")
                         st.write(f"📍 Coordinates: {dest_port.lat:.2f}°N, {dest_port.lon:.2f}°E")
                         st.write(f"🇪🇺 EEA Status: {'Yes' if dest_port.is_eea else 'No'}")
                         st.markdown('</div>', unsafe_allow_html=True)
