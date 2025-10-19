@@ -1214,13 +1214,13 @@ with tab3:
                     # Display top 10 countries
                     for country, count in sorted_countries[:10]:
                         st.write(f"**{country}**: {count} ports")
-                
-            else:
-                st.warning(f"❌ No ports found matching '{search_query}'")
-                st.info("💡 Try searching with:")
-                st.write("- Port names (e.g., 'Hamburg', 'Rotterdam')")
-                st.write("- Country codes (e.g., 'TR', 'DE', 'US')")
-                st.write("- Regions (e.g., 'Europe', 'Asia', 'North America')")
+        
+        else:
+            st.warning(f"❌ No ports found matching '{search_query}'")
+            st.info("💡 Try searching with:")
+            st.write("- Port names (e.g., 'Hamburg', 'Rotterdam')")
+            st.write("- Country codes (e.g., 'TR', 'DE', 'US')")
+            st.write("- Regions (e.g., 'Europe', 'Asia', 'North America')")
     
     else:
         st.warning("Please enter at least 2 characters to search")
