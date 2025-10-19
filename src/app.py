@@ -409,6 +409,7 @@ st.markdown("""
     }
     .sidebar-info {
         background: #e8f4fd;
+        color: var(--text-color, black);
         padding: 1rem;
         border-radius: 8px;
         margin: 1rem 0;
