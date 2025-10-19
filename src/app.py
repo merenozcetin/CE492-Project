@@ -469,22 +469,47 @@ st.markdown("""
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
     .stSelectbox > div > div {
-        background-color: var(--background-color, white);
-        color: var(--text-color, black);
+        background-color: var(--background-color, white) !important;
+        color: var(--text-color, black) !important;
         border-radius: 8px;
+        border: 1px solid var(--border-color, #e0e0e0) !important;
+    }
+    .stSelectbox > div > div > div {
+        background-color: var(--background-color, white) !important;
+        color: var(--text-color, black) !important;
+    }
+    .stSelectbox > div > div > div > div {
+        background-color: var(--background-color, white) !important;
+        color: var(--text-color, black) !important;
+    }
+    /* Placeholder styling */
+    .stSelectbox > div > div > div > div[data-baseweb="select"] {
+        background-color: var(--background-color, white) !important;
+        color: var(--text-color, black) !important;
+    }
+    .stSelectbox > div > div > div > div[data-baseweb="select"] > div {
+        background-color: var(--background-color, white) !important;
+        color: var(--text-color, black) !important;
     }
     .stButton > button {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
+        color: white !important;
+        border: none !important;
         border-radius: 8px;
         padding: 0.5rem 1rem;
         font-weight: 600;
         transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
     }
     .stButton > button:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3) !important;
+        background: linear-gradient(90deg, #5a6fd8 0%, #6a4190 100%) !important;
+    }
+    .stButton > button:disabled {
+        background: #cccccc !important;
+        color: #666666 !important;
+        cursor: not-allowed;
     }
     .metric-container {
         background: var(--background-color, white);
@@ -626,7 +651,7 @@ with tab1:
         origin_options = [f"{p.name} ({p.country})" for p in calculator.ports]
         origin_options = ["Select origin port..."] + origin_options
         
-        origin_choice = st.selectbox("Choose origin port:", origin_options, key="mrv_origin_select")
+        origin_choice = st.selectbox("Choose origin port:", origin_options, key="mrv_origin_select", index=0)
         
         if origin_choice and origin_choice != "Select origin port...":
             for port in calculator.ports:
@@ -647,7 +672,7 @@ with tab1:
         dest_options = [f"{p.name} ({p.country})" for p in calculator.ports]
         dest_options = ["Select destination port..."] + dest_options
         
-        dest_choice = st.selectbox("Choose destination port:", dest_options, key="mrv_dest_select")
+        dest_choice = st.selectbox("Choose destination port:", dest_options, key="mrv_dest_select", index=0)
         
         if dest_choice and dest_choice != "Select destination port...":
             for port in calculator.ports:
@@ -854,7 +879,7 @@ with tab2:
         origin_options = [f"{p.name} ({p.country})" for p in calculator.ports]
         origin_options = ["Select origin port..."] + origin_options
         
-        origin_choice = st.selectbox("Choose origin port:", origin_options, key="origin_select")
+        origin_choice = st.selectbox("Choose origin port:", origin_options, key="origin_select", index=0)
         
         if origin_choice and origin_choice != "Select origin port...":
             for port in calculator.ports:
@@ -877,7 +902,7 @@ with tab2:
         dest_options = [f"{p.name} ({p.country})" for p in calculator.ports]
         dest_options = ["Select destination port..."] + dest_options
         
-        dest_choice = st.selectbox("Choose destination port:", dest_options, key="dest_select")
+        dest_choice = st.selectbox("Choose destination port:", dest_options, key="dest_select", index=0)
         
         if dest_choice and dest_choice != "Select destination port...":
             for port in calculator.ports:
