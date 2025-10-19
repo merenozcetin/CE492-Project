@@ -598,7 +598,7 @@ with st.sidebar:
     
     st.markdown("### 🔧 Features")
     st.markdown("""
-    - **🌍 MRV Emissions**: Calculate CO₂ emissions for specific ships
+    - **💰 ETS Cost**: Calculate CO₂ emissions and EU-ETS costs for specific ships
     - **🚢 Port-to-Port**: Calculate maritime distances
     - **🇪🇺 EU-ETS**: EEA port identification
     - **📊 Real-time**: Live calculations
@@ -612,13 +612,13 @@ with st.sidebar:
     """)
 
 # Main tabs - Enhanced interface with search functionality
-tab1, tab2, tab3 = st.tabs(["🌍 MRV Emissions", "🚢 Port-to-Port", "🔍 Port Search"])
+tab1, tab2, tab3 = st.tabs(["💰 ETS Cost", "🚢 Port-to-Port", "🔍 Port Search"])
 
 with tab1:
     st.markdown('<div class="tab-container">', unsafe_allow_html=True)
     
-    st.header("🌍 MRV Emissions Calculator")
-    st.markdown("Calculate CO₂ emissions for specific ships using IMO numbers and MRV data")
+    st.header("💰 ETS Cost Calculator")
+    st.markdown("Calculate CO₂ emissions and EU-ETS costs for specific ships using IMO numbers and MRV data")
     
     # Progress indicator
     progress_bar = st.progress(0)
@@ -855,7 +855,7 @@ with tab1:
     # Calculate button
     can_calculate = all("✅" in status for status in validation_status)
     
-    if st.button("🌍 Calculate MRV Emissions", type="primary", disabled=not can_calculate):
+    if st.button("💰 Calculate ETS Cost", type="primary", disabled=not can_calculate):
         if can_calculate:
             try:
                 # Progress indicators
@@ -879,7 +879,7 @@ with tab1:
                 progress_bar.empty()
                 status_text.empty()
                 
-                st.success("✅ MRV Emissions Calculation Complete!")
+                st.success("✅ ETS Cost Calculation Complete!")
                 
                 # Enhanced results display
                 st.subheader("📊 Route Information")
@@ -1123,14 +1123,14 @@ with tab2:
                     
                     with col1:
                         st.markdown('<div class="port-card">', unsafe_allow_html=True)
-                        st.write(f"**From:** {origin_port.name} ({origin_port.country})")
+                    st.write(f"**From:** {origin_port.name} ({origin_port.country})")
                         st.write(f"📍 Coordinates: {origin_port.lat:.2f}°N, {origin_port.lon:.2f}°E")
                         st.write(f"🇪🇺 EEA Status: {'Yes' if origin_port.is_eea else 'No'}")
                         st.markdown('</div>', unsafe_allow_html=True)
                     
                     with col2:
                         st.markdown('<div class="port-card">', unsafe_allow_html=True)
-                        st.write(f"**To:** {dest_port.name} ({dest_port.country})")
+                    st.write(f"**To:** {dest_port.name} ({dest_port.country})")
                         st.write(f"📍 Coordinates: {dest_port.lat:.2f}°N, {dest_port.lon:.2f}°E")
                         st.write(f"🇪🇺 EEA Status: {'Yes' if dest_port.is_eea else 'No'}")
                         st.markdown('</div>', unsafe_allow_html=True)
@@ -1148,7 +1148,7 @@ with tab2:
                     st.error(f"❌ Calculation failed: {distance_result['error']}")
         else:
             st.warning("Please select both origin and destination ports")
-    
+
     st.markdown('</div>', unsafe_allow_html=True)  # Close tab-container
 
 with tab3:
@@ -1236,8 +1236,8 @@ with tab3:
                         with col2:
                             eea_count = sum(1 for p in matches if p.is_eea)
                             st.metric("EEA Ports", eea_count)
-                        
-                        with col3:
+                
+                with col3:
                             regions = set(p.region for p in matches)
                             st.metric("Regions", len(regions))
                         
@@ -1259,7 +1259,7 @@ with tab3:
                             for country, count in sorted_countries[:10]:
                                 st.write(f"**{country}**: {count} ports")
                 
-                else:
+            else:
                     st.warning(f"❌ No ports found matching '{search_query}'")
                     st.info("💡 Try searching with:")
                     st.write("- Port names (e.g., 'Hamburg', 'Rotterdam')")
