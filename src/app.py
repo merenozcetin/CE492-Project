@@ -712,11 +712,25 @@ with tab1:
         st.write("**Origin Port**")
         origin_choice = st.selectbox("Choose origin port:", port_options, key="mrv_origin_select", index=0)
         
+        if origin_choice and origin_choice != "Select port...":
+            for port in calculator.ports:
+                if f"{port.name} ({port.country})" == origin_choice:
+                    mrv_origin_port = port
+                    break
+            else:
+                mrv_origin_port = None
+        else:
+            mrv_origin_port = None
+        
+        if mrv_origin_port:
+            st.success(f"✅ **{mrv_origin_port.name}** ({mrv_origin_port.country})")
+            st.info(f"📍 Coordinates: {mrv_origin_port.lat:.2f}°N, {mrv_origin_port.lon:.2f}°E")
+        
         # Destination port selection  
         st.write("**Destination Port**")
         dest_choice = st.selectbox("Choose destination port:", port_options, key="mrv_dest_select", index=0)
         
-        if dest_choice and dest_choice != "Select destination port...":
+        if dest_choice and dest_choice != "Select port...":
             for port in calculator.ports:
                 if f"{port.name} ({port.country})" == dest_choice:
                     mrv_dest_port = port
