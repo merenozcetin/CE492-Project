@@ -668,11 +668,46 @@ with tab1:
                     st.error(f"❌ Ship IMO {imo_number} not found in MRV database")
     
     with col2:
-        st.subheader("📍 Route Information")
+        st.subheader("💰 ETS Cost Calculator")
         
-        # Origin port selection - back to original dropdown
+        # Origin port selection with search functionality
         st.write("**Origin Port**")
-        origin_options = [f"{p.name} ({p.country})" for p in calculator.ports]
+        
+        # Search input for origin port
+        origin_search = st.text_input(
+            "Search origin port:",
+            placeholder="e.g., 'Hamburg', 'TR', 'Turkey'",
+            key="origin_search",
+            help="Type to search by port name, country code, or country name"
+        )
+        
+        # Filter ports based on search
+        if origin_search and len(origin_search.strip()) >= 2:
+            search_query = origin_search.strip().lower()
+            filtered_ports = []
+            for port in calculator.ports:
+                country_str = str(port.country) if port.country is not None else ""
+                if (search_query in port.name.lower() or 
+                    search_query.upper() == country_str.upper() or
+                    search_query in country_str.lower() or
+                    search_query in port.region.lower()):
+                    filtered_ports.append(port)
+            
+            # Sort: exact country matches first, then port names
+            def sort_key(port):
+                country_str = str(port.country) if port.country is not None else ""
+                if search_query.upper() == country_str.upper():
+                    return (0, port.name)
+                elif search_query in port.name.lower():
+                    return (1, port.name)
+                else:
+                    return (2, port.name)
+            
+            filtered_ports.sort(key=sort_key)
+            origin_options = [f"{p.name} ({p.country})" for p in filtered_ports[:50]]  # Limit to 50 results
+        else:
+            origin_options = [f"{p.name} ({p.country})" for p in calculator.ports]
+        
         origin_options = ["Select origin port..."] + origin_options
         
         origin_choice = st.selectbox("Choose origin port:", origin_options, key="mrv_origin_select", index=0)
@@ -691,9 +726,44 @@ with tab1:
             st.success(f"✅ **{mrv_origin_port.name}** ({mrv_origin_port.country})")
             st.info(f"📍 Coordinates: {mrv_origin_port.lat:.2f}°N, {mrv_origin_port.lon:.2f}°E")
         
-        # Destination port selection - back to original dropdown
+        # Destination port selection with search functionality
         st.write("**Destination Port**")
-        dest_options = [f"{p.name} ({p.country})" for p in calculator.ports]
+        
+        # Search input for destination port
+        dest_search = st.text_input(
+            "Search destination port:",
+            placeholder="e.g., 'Shanghai', 'CN', 'China'",
+            key="dest_search",
+            help="Type to search by port name, country code, or country name"
+        )
+        
+        # Filter ports based on search
+        if dest_search and len(dest_search.strip()) >= 2:
+            search_query = dest_search.strip().lower()
+            filtered_ports = []
+            for port in calculator.ports:
+                country_str = str(port.country) if port.country is not None else ""
+                if (search_query in port.name.lower() or 
+                    search_query.upper() == country_str.upper() or
+                    search_query in country_str.lower() or
+                    search_query in port.region.lower()):
+                    filtered_ports.append(port)
+            
+            # Sort: exact country matches first, then port names
+            def sort_key(port):
+                country_str = str(port.country) if port.country is not None else ""
+                if search_query.upper() == country_str.upper():
+                    return (0, port.name)
+                elif search_query in port.name.lower():
+                    return (1, port.name)
+                else:
+                    return (2, port.name)
+            
+            filtered_ports.sort(key=sort_key)
+            dest_options = [f"{p.name} ({p.country})" for p in filtered_ports[:50]]  # Limit to 50 results
+        else:
+            dest_options = [f"{p.name} ({p.country})" for p in calculator.ports]
+        
         dest_options = ["Select destination port..."] + dest_options
         
         dest_choice = st.selectbox("Choose destination port:", dest_options, key="mrv_dest_select", index=0)
