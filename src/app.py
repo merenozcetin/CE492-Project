@@ -14,6 +14,7 @@ import json
 import os
 from typing import Dict, List, Optional
 from dataclasses import dataclass
+from java_searoute_wrapper import JavaSeaRouteWrapper
 
 @dataclass
 class MRVShip:
@@ -50,15 +51,17 @@ class Port:
     is_eea: bool = False
 
 class SeaRouteCalculator:
-    """Main SeaRoute distance calculator using Python wrapper"""
+    """Main SeaRoute distance calculator using Java SeaRoute for accurate maritime routing"""
     
     def __init__(self):
         self.ports = []
         self.mrv_ships = []
         self.ets_prices = []
+        self.java_wrapper = None
         self._load_ports()
         self._load_mrv_data()
         self._load_ets_prices()
+        self._initialize_java_searoute()
     
     def _load_ports(self):
         """Load port database from ports.json"""
@@ -82,6 +85,15 @@ class SeaRouteCalculator:
             
         except Exception as e:
             print(f"❌ Error loading ports: {e}")
+    
+    def _initialize_java_searoute(self):
+        """Initialize Java SeaRoute wrapper for accurate maritime routing"""
+        try:
+            self.java_wrapper = JavaSeaRouteWrapper()
+            print("✅ Java SeaRoute initialized successfully")
+        except Exception as e:
+            print(f"❌ Error initializing Java SeaRoute: {e}")
+            self.java_wrapper = None
     
     def _load_mrv_data(self):
         """Load MRV ship data from CSV file"""
@@ -254,8 +266,27 @@ class SeaRouteCalculator:
     
     def calculate_distance(self, origin_lon: float, origin_lat: float, 
                           dest_lon: float, dest_lat: float) -> Dict:
-        """Calculate maritime distance using Python SeaRoute wrapper"""
+        """Calculate maritime distance using Java SeaRoute for accurate shipping routes"""
         
+        # Try Java SeaRoute first (most accurate)
+        if self.java_wrapper:
+            try:
+                result = self.java_wrapper.calculate_distance(origin_lon, origin_lat, dest_lon, dest_lat)
+                if result['success']:
+                    return {
+                        'success': True,
+                        'distance_km': result['distance_km'],
+                        'distance_nm': result['distance_nm'],
+                        'route_name': 'Maritime Route (Java SeaRoute)',
+                        'method': 'Java SeaRoute (Actual Shipping Routes)',
+                        'route_complexity': result.get('route_complexity', 0)
+                    }
+                else:
+                    print(f"❌ Java SeaRoute failed: {result['error']}")
+            except Exception as e:
+                print(f"❌ Java SeaRoute error: {e}")
+        
+        # Fallback to Python SeaRoute wrapper
         try:
             # Round coordinates to 2 decimal places
             origin_lon = round(origin_lon, 2)
@@ -269,13 +300,7 @@ class SeaRouteCalculator:
                 destination=[dest_lon, dest_lat]
             )
             
-            # Debug: Print the route result to see its structure
-            print(f"Route result: {route}")
-            print(f"Route type: {type(route)}")
-            print(f"Route keys: {route.keys() if isinstance(route, dict) else 'Not a dict'}")
-            
             # Extract distance from route result
-            # Try different possible keys for distance
             if isinstance(route, dict):
                 if 'length' in route:
                     distance_km = route['length'] / 1000  # Convert from meters to km
@@ -284,9 +309,8 @@ class SeaRouteCalculator:
                 elif 'total_distance' in route:
                     distance_km = route['total_distance'] / 1000  # Convert from meters to km
                 else:
-                    # If no distance key found, try to calculate from coordinates
+                    # If no distance key found, calculate great circle distance
                     import math
-                    # Simple great circle distance calculation as fallback
                     lat1, lon1 = math.radians(origin_lat), math.radians(origin_lon)
                     lat2, lon2 = math.radians(dest_lat), math.radians(dest_lon)
                     dlat = lat2 - lat1
@@ -303,13 +327,30 @@ class SeaRouteCalculator:
                 'success': True,
                 'distance_km': round(distance_km, 1),
                 'distance_nm': round(distance_nm, 1),
-                'route_name': 'SeaRoute Calculation'
+                'route_name': 'Maritime Route (Python SeaRoute)',
+                'method': 'Python SeaRoute Wrapper (Fallback)'
             }
             
         except Exception as e:
+            print(f"❌ Python SeaRoute calculation error: {e}")
+            
+            # Final fallback to great circle distance
+            import math
+            lat1, lon1 = math.radians(origin_lat), math.radians(origin_lon)
+            lat2, lon2 = math.radians(dest_lat), math.radians(dest_lon)
+            dlat = lat2 - lat1
+            dlon = lon2 - lon1
+            a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+            c = 2 * math.asin(math.sqrt(a))
+            distance_km = 6371 * c  # Earth radius in km
+            distance_nm = distance_km / 1.852
+            
             return {
-                'success': False,
-                'error': f"SeaRoute calculation failed: {str(e)}"
+                'success': True,
+                'distance_km': round(distance_km, 1),
+                'distance_nm': round(distance_nm, 1),
+                'route_name': 'Great Circle Distance (Final Fallback)',
+                'method': 'Great Circle Distance (Final Fallback)'
             }
     
     def calculate_emissions(self, imo_number: str, origin_port: Port, dest_port: Port) -> EmissionResult:
@@ -1073,20 +1114,28 @@ with tab2:
                         )
                         st.markdown('</div>', unsafe_allow_html=True)
                     
+                    # Show calculation method if available
+                    if 'method' in distance_result:
+                        st.info(f"📊 **Calculation Method:** {distance_result['method']}")
+                    
+                    # Show route complexity if available
+                    if 'route_complexity' in distance_result and distance_result['route_complexity'] > 0:
+                        st.info(f"🗺️ **Route Complexity:** {distance_result['route_complexity']} waypoints")
+                    
                     # Enhanced route details
                     st.subheader("📍 Route Details")
                     col1, col2 = st.columns(2)
                     
                     with col1:
                         st.markdown('<div class="port-card">', unsafe_allow_html=True)
-                        st.write(f"**From:** {origin_port.name} ({origin_port.country})")
+                    st.write(f"**From:** {origin_port.name} ({origin_port.country})")
                         st.write(f"📍 Coordinates: {origin_port.lat:.2f}°N, {origin_port.lon:.2f}°E")
                         st.write(f"🇪🇺 EEA Status: {'Yes' if origin_port.is_eea else 'No'}")
                         st.markdown('</div>', unsafe_allow_html=True)
                     
                     with col2:
                         st.markdown('<div class="port-card">', unsafe_allow_html=True)
-                        st.write(f"**To:** {dest_port.name} ({dest_port.country})")
+                    st.write(f"**To:** {dest_port.name} ({dest_port.country})")
                         st.write(f"📍 Coordinates: {dest_port.lat:.2f}°N, {dest_port.lon:.2f}°E")
                         st.write(f"🇪🇺 EEA Status: {'Yes' if dest_port.is_eea else 'No'}")
                         st.markdown('</div>', unsafe_allow_html=True)
@@ -1214,8 +1263,8 @@ with tab3:
                     # Display top 10 countries
                     for country, count in sorted_countries[:10]:
                         st.write(f"**{country}**: {count} ports")
-        
-        else:
+                
+            else:
             st.warning(f"❌ No ports found matching '{search_query}'")
             st.info("💡 Try searching with:")
             st.write("- Port names (e.g., 'Hamburg', 'Rotterdam')")
