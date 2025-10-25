@@ -12,8 +12,12 @@ import streamlit as st
 import searoute as sr
 import json
 import os
+import sys
 from typing import Dict, List, Optional
 from dataclasses import dataclass
+
+# Add tools directory to path for Java SeaRoute wrapper
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'tools'))
 from java_searoute_wrapper import JavaSeaRouteWrapper
 
 @dataclass

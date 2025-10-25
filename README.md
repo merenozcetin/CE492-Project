@@ -12,10 +12,20 @@ searoute-master/
 │   ├── ports.json               # Port database (13,951 ports)
 │   ├── mrv_data.csv             # MRV ship emissions data
 │   └── ets_price.csv            # EUA price data by year
-├── docs/
-│   └── CE492_Project_Description[1].md  # Project documentation
+├── tools/
+│   ├── java_searoute_wrapper.py # Java SeaRoute Python wrapper
+│   ├── distance_comparison.py   # Distance accuracy comparison tool
+│   └── README.md                # Tools documentation
+├── java-searoute/
+│   ├── searoute.jar             # Java SeaRoute executable
+│   ├── searoute.bat             # Windows batch script
+│   ├── searoute.sh              # Linux/Unix shell script
+│   └── README.md                # Java SeaRoute documentation
+├── marnet/
+│   └── *.gpkg                   # Maritime network database files
 ├── requirements.txt              # Python dependencies
 ├── LICENSE                       # MIT License
+├── .gitignore                    # Git ignore rules
 └── README.md                     # This file
 ```
 
