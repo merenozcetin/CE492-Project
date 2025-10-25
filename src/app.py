@@ -1241,39 +1241,38 @@ with tab3:
                         
                         with col1:
                             st.metric("Total Results", len(matches))
-                
-                with col2:
+                        
+                        with col2:
                             eea_count = sum(1 for p in matches if p.is_eea)
                             st.metric("EEA Ports", eea_count)
-                
-                with col3:
-                    regions = set(p.region for p in matches)
-                    st.metric("Regions", len(regions))
-                
-                with col4:
-                    countries = set(p.country for p in matches)
-                    st.metric("Countries", len(countries))
-                
-                # Show top countries
-                if countries:
-                    st.subheader("🌍 Countries Found")
-                    country_counts = {}
-                    for port in matches:
-                        country_counts[port.country] = country_counts.get(port.country, 0) + 1
-                    
-                    # Sort by count
-                    sorted_countries = sorted(country_counts.items(), key=lambda x: x[1], reverse=True)
-                    
-                    # Display top 10 countries
-                    for country, count in sorted_countries[:10]:
-                        st.write(f"**{country}**: {count} ports")
-                
-            else:
-            st.warning(f"❌ No ports found matching '{search_query}'")
-            st.info("💡 Try searching with:")
-            st.write("- Port names (e.g., 'Hamburg', 'Rotterdam')")
-            st.write("- Country codes (e.g., 'TR', 'DE', 'US')")
-            st.write("- Regions (e.g., 'Europe', 'Asia', 'North America')")
+                        
+                        with col3:
+                            regions = set(p.region for p in matches)
+                            st.metric("Regions", len(regions))
+                        
+                        with col4:
+                            countries = set(p.country for p in matches)
+                            st.metric("Countries", len(countries))
+                        
+                        # Show top countries
+                        if countries:
+                            st.subheader("🌍 Countries Found")
+                            country_counts = {}
+                            for port in matches:
+                                country_counts[port.country] = country_counts.get(port.country, 0) + 1
+                            
+                            # Sort by count
+                            sorted_countries = sorted(country_counts.items(), key=lambda x: x[1], reverse=True)
+                            
+                            # Display top 10 countries
+                            for country, count in sorted_countries[:10]:
+                                st.write(f"**{country}**: {count} ports")
+                    else:
+                        st.warning(f"❌ No ports found matching '{search_query}'")
+                        st.info("💡 Try searching with:")
+                        st.write("- Port names (e.g., 'Hamburg', 'Rotterdam')")
+                        st.write("- Country codes (e.g., 'TR', 'DE', 'US')")
+                        st.write("- Regions (e.g., 'Europe', 'Asia', 'North America')")
     
     else:
         st.warning("Please enter at least 2 characters to search")
