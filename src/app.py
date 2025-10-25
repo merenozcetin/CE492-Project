@@ -93,28 +93,41 @@ class SeaRouteCalculator:
     def _initialize_java_searoute(self):
         """Initialize Java SeaRoute wrapper for accurate maritime routing"""
         try:
+            print(f"Current working directory: {os.getcwd()}")
+            print(f"Files in current directory: {os.listdir('.')}")
+            
             # Try different possible paths for the JAR file
             possible_paths = [
                 "java-searoute/searoute.jar",
                 "../java-searoute/searoute.jar",
-                "searoute.jar"
+                "searoute.jar",
+                "./java-searoute/searoute.jar"
             ]
             
             jar_path = None
             for path in possible_paths:
+                print(f"Checking path: {path} - exists: {os.path.exists(path)}")
                 if os.path.exists(path):
                     jar_path = path
                     break
             
             if jar_path:
+                print(f"Found JAR at: {jar_path}")
                 self.java_wrapper = JavaSeaRouteWrapper(jar_path)
-                print(f"✅ Java SeaRoute initialized successfully with JAR: {jar_path}")
+                print(f"Java SeaRoute initialized successfully with JAR: {jar_path}")
             else:
-                print("❌ SeaRoute JAR file not found in any expected location")
+                print("SeaRoute JAR file not found in any expected location")
+                print("Available files:")
+                for root, dirs, files in os.walk('.'):
+                    for file in files:
+                        if file.endswith('.jar'):
+                            print(f"  Found JAR: {os.path.join(root, file)}")
                 self.java_wrapper = None
                 
         except Exception as e:
-            print(f"❌ Error initializing Java SeaRoute: {e}")
+            print(f"Error initializing Java SeaRoute: {e}")
+            import traceback
+            traceback.print_exc()
             self.java_wrapper = None
     
     def _load_mrv_data(self):

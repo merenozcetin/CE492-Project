@@ -24,9 +24,20 @@ class JavaSeaRouteWrapper:
         self.searoute_jar_path = searoute_jar_path
         self.temp_dir = tempfile.mkdtemp()
         
+        # Check if Java is available
+        try:
+            java_check = subprocess.run(['java', '-version'], capture_output=True, text=True, timeout=10)
+            print(f"Java version check: return code {java_check.returncode}")
+            if java_check.returncode != 0:
+                print(f"Java not available: {java_check.stderr}")
+        except Exception as e:
+            print(f"Java check failed: {e}")
+        
         # Verify JAR file exists
         if not os.path.exists(self.searoute_jar_path):
             raise FileNotFoundError(f"SeaRoute JAR file not found at: {self.searoute_jar_path}")
+        
+        print(f"Java SeaRoute wrapper initialized with JAR: {self.searoute_jar_path}")
     
     def calculate_distance(self, origin_lon: float, origin_lat: float, 
                           dest_lon: float, dest_lat: float) -> Dict:
