@@ -69,7 +69,12 @@ class JavaSeaRouteWrapper:
             ]
             
             # Execute command
+            print(f"Running Java command: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            
+            print(f"Java return code: {result.returncode}")
+            print(f"Java stdout: {result.stdout}")
+            print(f"Java stderr: {result.stderr}")
             
             if result.returncode != 0:
                 raise Exception(f"Java SeaRoute failed: {result.stderr}")

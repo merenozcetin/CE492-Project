@@ -292,11 +292,11 @@ class SeaRouteCalculator:
         
         # Try Java SeaRoute first (most accurate)
         if self.java_wrapper:
-            print(f"🔍 Attempting Java SeaRoute calculation: ({origin_lat:.4f}, {origin_lon:.4f}) -> ({dest_lat:.4f}, {dest_lon:.4f})")
+            print(f"Attempting Java SeaRoute calculation: ({origin_lat:.4f}, {origin_lon:.4f}) -> ({dest_lat:.4f}, {dest_lon:.4f})")
             try:
                 result = self.java_wrapper.calculate_distance(origin_lon, origin_lat, dest_lon, dest_lat)
                 if result['success']:
-                    print(f"✅ Java SeaRoute success: {result['distance_nm']:.1f} nm")
+                    print(f"Java SeaRoute success: {result['distance_nm']:.1f} nm")
                     return {
                         'success': True,
                         'distance_km': result['distance_km'],
@@ -306,11 +306,11 @@ class SeaRouteCalculator:
                         'route_complexity': result.get('route_complexity', 0)
                     }
                 else:
-                    print(f"❌ Java SeaRoute failed: {result['error']}")
+                    print(f"Java SeaRoute failed: {result['error']}")
             except Exception as e:
-                print(f"❌ Java SeaRoute error: {e}")
+                print(f"Java SeaRoute error: {e}")
         else:
-            print("⚠️ Java SeaRoute wrapper not available, falling back to Python SeaRoute")
+            print("Java SeaRoute wrapper not available, falling back to Python SeaRoute")
         
         # Fallback to Python SeaRoute wrapper
         try:
