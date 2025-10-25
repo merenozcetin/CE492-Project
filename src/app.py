@@ -93,8 +93,26 @@ class SeaRouteCalculator:
     def _initialize_java_searoute(self):
         """Initialize Java SeaRoute wrapper for accurate maritime routing"""
         try:
-            self.java_wrapper = JavaSeaRouteWrapper()
-            print("✅ Java SeaRoute initialized successfully")
+            # Try different possible paths for the JAR file
+            possible_paths = [
+                "java-searoute/searoute.jar",
+                "../java-searoute/searoute.jar",
+                "searoute.jar"
+            ]
+            
+            jar_path = None
+            for path in possible_paths:
+                if os.path.exists(path):
+                    jar_path = path
+                    break
+            
+            if jar_path:
+                self.java_wrapper = JavaSeaRouteWrapper(jar_path)
+                print(f"✅ Java SeaRoute initialized successfully with JAR: {jar_path}")
+            else:
+                print("❌ SeaRoute JAR file not found in any expected location")
+                self.java_wrapper = None
+                
         except Exception as e:
             print(f"❌ Error initializing Java SeaRoute: {e}")
             self.java_wrapper = None
@@ -274,9 +292,11 @@ class SeaRouteCalculator:
         
         # Try Java SeaRoute first (most accurate)
         if self.java_wrapper:
+            print(f"🔍 Attempting Java SeaRoute calculation: ({origin_lat:.4f}, {origin_lon:.4f}) -> ({dest_lat:.4f}, {dest_lon:.4f})")
             try:
                 result = self.java_wrapper.calculate_distance(origin_lon, origin_lat, dest_lon, dest_lat)
                 if result['success']:
+                    print(f"✅ Java SeaRoute success: {result['distance_nm']:.1f} nm")
                     return {
                         'success': True,
                         'distance_km': result['distance_km'],
@@ -289,6 +309,8 @@ class SeaRouteCalculator:
                     print(f"❌ Java SeaRoute failed: {result['error']}")
             except Exception as e:
                 print(f"❌ Java SeaRoute error: {e}")
+        else:
+            print("⚠️ Java SeaRoute wrapper not available, falling back to Python SeaRoute")
         
         # Fallback to Python SeaRoute wrapper
         try:
