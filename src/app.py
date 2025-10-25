@@ -93,8 +93,18 @@ class SeaRouteCalculator:
     def _initialize_java_searoute(self):
         """Initialize Java SeaRoute wrapper for accurate maritime routing"""
         try:
-            print(f"Current working directory: {os.getcwd()}")
-            print(f"Files in current directory: {os.listdir('.')}")
+            # First check if Java is available
+            import subprocess
+            try:
+                java_check = subprocess.run(['java', '-version'], capture_output=True, text=True, timeout=10)
+                if java_check.returncode != 0:
+                    print("Java is not available in this environment - using Python SeaRoute fallback")
+                    self.java_wrapper = None
+                    return
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                print("Java command not found - using Python SeaRoute fallback")
+                self.java_wrapper = None
+                return
             
             # Try different possible paths for the JAR file
             possible_paths = [
@@ -106,28 +116,19 @@ class SeaRouteCalculator:
             
             jar_path = None
             for path in possible_paths:
-                print(f"Checking path: {path} - exists: {os.path.exists(path)}")
                 if os.path.exists(path):
                     jar_path = path
                     break
             
             if jar_path:
-                print(f"Found JAR at: {jar_path}")
                 self.java_wrapper = JavaSeaRouteWrapper(jar_path)
                 print(f"Java SeaRoute initialized successfully with JAR: {jar_path}")
             else:
-                print("SeaRoute JAR file not found in any expected location")
-                print("Available files:")
-                for root, dirs, files in os.walk('.'):
-                    for file in files:
-                        if file.endswith('.jar'):
-                            print(f"  Found JAR: {os.path.join(root, file)}")
+                print("SeaRoute JAR file not found - using Python SeaRoute fallback")
                 self.java_wrapper = None
                 
         except Exception as e:
-            print(f"Error initializing Java SeaRoute: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"Error initializing Java SeaRoute: {e} - using Python SeaRoute fallback")
             self.java_wrapper = None
     
     def _load_mrv_data(self):
@@ -323,7 +324,7 @@ class SeaRouteCalculator:
             except Exception as e:
                 print(f"Java SeaRoute error: {e}")
         else:
-            print("Java SeaRoute wrapper not available, falling back to Python SeaRoute")
+            print("Java SeaRoute not available in this environment, using Python SeaRoute")
         
         # Fallback to Python SeaRoute wrapper
         try:
@@ -367,7 +368,7 @@ class SeaRouteCalculator:
                 'distance_km': round(distance_km, 1),
                 'distance_nm': round(distance_nm, 1),
                 'route_name': 'Maritime Route (Python SeaRoute)',
-                'method': 'Python SeaRoute Wrapper (Fallback)'
+                        'method': 'Python SeaRoute (Java not available)'
             }
             
         except Exception as e:
@@ -389,7 +390,7 @@ class SeaRouteCalculator:
                 'distance_km': round(distance_km, 1),
                 'distance_nm': round(distance_nm, 1),
                 'route_name': 'Great Circle Distance (Final Fallback)',
-                'method': 'Great Circle Distance (Final Fallback)'
+                    'method': 'Great Circle Distance (Java not available)'
             }
     
     def calculate_emissions(self, imo_number: str, origin_port: Port, dest_port: Port) -> EmissionResult:
