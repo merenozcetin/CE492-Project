@@ -2,20 +2,7 @@
 nixPkgs = ["python311", "openjdk"]
 
 [phases.install]
-cmds = [
-  "echo 'Installing Python dependencies...'",
-  "pip install -r requirements.txt",
-  "echo 'Checking Java installation...'",
-  "export PATH=$PATH:/usr/lib/jvm/java-11-openjdk-amd64/bin",
-  "java -version || echo 'Java check failed'",
-  "echo 'Setup complete'"
-]
-
-[phases.build]
-cmds = [
-  "echo 'Build phase started'",
-  "export PATH=$PATH:/usr/lib/jvm/java-11-openjdk-amd64/bin"
-]
+cmds = ["pip install -r requirements.txt"]
 
 [start]
-cmd = "cd server && export PATH=$PATH:/usr/lib/jvm/java-11-openjdk-amd64/bin && python app.py"
+cmd = "cd server && python app.py"
