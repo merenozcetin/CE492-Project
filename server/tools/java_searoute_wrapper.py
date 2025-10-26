@@ -24,14 +24,22 @@ class JavaSeaRouteWrapper:
         self.searoute_jar_path = searoute_jar_path
         self.temp_dir = tempfile.mkdtemp()
         
-        # Check if Java is available
-        try:
-            java_check = subprocess.run(['java', '-version'], capture_output=True, text=True, timeout=10)
-            print(f"Java version check: return code {java_check.returncode}")
-            if java_check.returncode != 0:
-                print(f"Java not available: {java_check.stderr}")
-        except Exception as e:
-            print(f"Java check failed: {e}")
+        # Check if Java is available (try multiple possible paths)
+        java_paths = ['java', '/usr/bin/java', '/usr/lib/jvm/default-java/bin/java']
+        self.java_binary = 'java'
+        
+        for path in java_paths:
+            try:
+                java_check = subprocess.run([path, '-version'], capture_output=True, text=True, timeout=10)
+                if java_check.returncode == 0:
+                    self.java_binary = path
+                    print(f"Java found at: {path}")
+                    break
+            except Exception:
+                continue
+        
+        if self.java_binary == 'java':
+            print("Warning: Java not found in standard locations")
         
         # Verify JAR file exists
         if not os.path.exists(self.searoute_jar_path):
@@ -73,7 +81,7 @@ class JavaSeaRouteWrapper:
             
             # Run Java SeaRoute
             cmd = [
-                'java', '-jar', self.searoute_jar_path,
+                self.java_binary, '-jar', self.searoute_jar_path,
                 '-i', input_file,
                 '-o', output_file,
                 '-res', '20'  # 20km resolution
@@ -178,7 +186,7 @@ class JavaSeaRouteWrapper:
             
             # Run Java SeaRoute
             cmd = [
-                'java', '-jar', self.searoute_jar_path,
+                self.java_binary, '-jar', self.searoute_jar_path,
                 '-i', input_file,
                 '-o', output_file,
                 '-res', '20'  # 20km resolution
