@@ -1100,6 +1100,14 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                     <div class="result-card">
                         <div class="result-header">🇪🇺 ETS Coverage</div>
                         <div class="result-value" style="font-size: 2rem;">${{data.ets_coverage.description}}</div>
+                        <div class="metric-row">
+                            <span class="metric-label">Origin EEA Status</span>
+                            <span class="metric-value">${{data.ets_coverage.origin_eea ? 'Yes 🇪🇺' : 'No'}}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Destination EEA Status</span>
+                            <span class="metric-value">${{data.ets_coverage.dest_eea ? 'Yes 🇪🇺' : 'No'}}</span>
+                        </div>
                     </div>
                     
                     <div class="result-card">
