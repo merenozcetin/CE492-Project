@@ -28,7 +28,7 @@ ENV PORT=8080
 # Expose port
 EXPOSE 8080
 
-# Run the application
+# Run the application from server directory
 WORKDIR /app/server
-
-CMD ["python3", "app.py"]
+ENTRYPOINT ["python3"]
+CMD ["app.py"]
