@@ -1008,10 +1008,11 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         """
 
 def main():
-    PORT = 8080
+    # Use Railway's PORT environment variable, fallback to 8080 for local
+    PORT = int(os.environ.get('PORT', 8080))
     
     print("=" * 60)
-    print("EU ETS COST CALCULATOR - LOCAL WEB SERVER")
+    print("EU ETS COST CALCULATOR - WEB SERVER")
     print("=" * 60)
     print(f"Java SeaRoute Available: {'Yes' if JAVA_AVAILABLE else 'No'}")
     print(f"Starting server on port {PORT}...")
@@ -1021,6 +1022,7 @@ def main():
     
     try:
         with socketserver.TCPServer(("", PORT), CalculatorHandler) as httpd:
+            print(f"Server running at http://0.0.0.0:{PORT}")
             httpd.serve_forever()
     except KeyboardInterrupt:
         print("\nServer stopped.")

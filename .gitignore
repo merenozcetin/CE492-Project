@@ -53,9 +53,11 @@ Thumbs.db
 test_output.geojson
 
 # Project specific
-searoute/
-marnet/
-java-searoute/
-tools/
-src/app_standalone.py
-local_web_server.py
+__pycache__/
+*.pyc
+.python-version
+.env
+.env.local
+
+# Railway
+.railway/

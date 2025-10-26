@@ -34,6 +34,16 @@ pip install -r requirements.txt
 
 ### Run the Application
 
+**Option 1: Using the launcher (Easy)**
+```bash
+# Windows
+start_server.bat
+
+# Linux/Mac
+./start_server.sh
+```
+
+**Option 2: Manual start**
 ```bash
 cd server
 python app.py

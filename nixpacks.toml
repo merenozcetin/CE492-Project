@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["python311", "openjdk"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[phases.build]
+cmds = ["echo 'Java and Python installed successfully'"]
+
+[start]
+cmd = "cd server && python app.py"
