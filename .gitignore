@@ -50,10 +50,12 @@ Thumbs.db
 *.log
 *.out
 *.geojson
+test_output.geojson
 
-# Streamlit
-.streamlit/
-
-# Test files
-test_*.py
-*_test.py
+# Project specific
+searoute/
+marnet/
+java-searoute/
+tools/
+src/app_standalone.py
+local_web_server.py
