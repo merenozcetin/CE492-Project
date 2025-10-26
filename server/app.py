@@ -51,6 +51,7 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(html_content.encode())
     
+    
     def handle_calculation(self):
         try:
             # Parse query parameters
@@ -380,232 +381,85 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EU ETS Cost Calculator - Local</title>
+    <title>Maritime Distance & ETS Calculator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {{
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        * {{
             margin: 0;
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        
+        body {{
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
             min-height: 100vh;
         }}
         
-        .container {{
-            max-width: 1000px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            overflow: hidden;
+        .header {{
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: white;
+            padding: 2rem 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }}
         
-        .header {{
-            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
+        .header-content {{
+            max-width: 1200px;
+            margin: 0 auto;
         }}
         
         .header h1 {{
-            margin: 0;
-            font-size: 2.5em;
-            font-weight: 300;
+            font-size: 1.875rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.025em;
         }}
         
-        .content {{
-            padding: 30px;
+        .header p {{
+            font-size: 0.95rem;
+            color: #94a3b8;
+            font-weight: 400;
         }}
         
-        .form-section {{
-            background: #f8f9fa;
-            padding: 25px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-        }}
-        
-        .form-row {{
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 20px;
-        }}
-        
-        .form-group {{
-            display: flex;
-            flex-direction: column;
-        }}
-        
-        .form-group label {{
-            font-weight: bold;
-            margin-bottom: 5px;
-            color: #2c3e50;
-        }}
-        
-        .form-group input, .form-group select {{
-            padding: 12px;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            font-size: 1em;
-            transition: border-color 0.3s ease;
-        }}
-        
-        .form-group input:focus, .form-group select:focus {{
-            outline: none;
-            border-color: #3498db;
-        }}
-        
-        .search-results {{
-            max-height: 200px;
-            overflow-y: auto;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-            margin-top: 5px;
-            display: none;
-        }}
-        
-        .search-result {{
-            padding: 10px;
-            cursor: pointer;
-            border-bottom: 1px solid #f8f9fa;
-        }}
-        
-        .search-result:hover {{
-            background: #e9ecef;
-        }}
-        
-        .search-result:last-child {{
-            border-bottom: none;
-        }}
-        
-        .calculate-btn {{
-            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 25px;
-            font-size: 1.1em;
-            cursor: pointer;
-            transition: transform 0.3s ease;
-            width: 100%;
-            margin-top: 20px;
-        }}
-        
-        .calculate-btn:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
-        }}
-        
-        .calculate-btn:disabled {{
-            background: #bdc3c7;
-            cursor: not-allowed;
-            transform: none;
-        }}
-        
-        .results {{
-            display: none;
-            background: white;
-            border-radius: 10px;
-            padding: 25px;
-            margin-top: 30px;
-            border: 2px solid #e9ecef;
-        }}
-        
-        .results.show {{
-            display: block;
-        }}
-        
-        .result-method {{
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 15px 0;
-            border-left: 5px solid #3498db;
-        }}
-        
-        .result-method.java {{
-            border-left-color: #27ae60;
-            background: #e8f5e8;
-        }}
-        
-        .method-title {{
-            font-weight: bold;
-            font-size: 1.2em;
-            margin-bottom: 10px;
-            color: #2c3e50;
-        }}
-        
-        .distance-value {{
-            font-size: 2em;
-            font-weight: bold;
-            color: #3498db;
-            margin: 10px 0;
-        }}
-        
-        .distance-value.java {{
-            color: #27ae60;
-        }}
-        
-        .improvement {{
-            color: #27ae60;
-            font-weight: bold;
-            font-size: 1.1em;
-        }}
-        
-        .loading {{
-            text-align: center;
-            padding: 20px;
-            color: #7f8c8d;
-        }}
-        
-        .error {{
-            background: #f8d7da;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 15px 0;
-        }}
-        
-        .status {{
-            background: #d4edda;
-            color: #155724;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 15px 0;
-        }}
-        
-        .coordinates {{
-            font-family: monospace;
-            background: #f8f9fa;
-            padding: 10px;
-            border-radius: 5px;
-            margin: 10px 0;
+        .container {{
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
         }}
         
         .tabs {{
             display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #e9ecef;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid #e2e8f0;
+            overflow-x: auto;
         }}
         
         .tab-btn {{
-            background: white;
+            background: transparent;
             border: none;
-            padding: 15px 30px;
-            font-size: 1.1em;
+            padding: 0.875rem 1.5rem;
+            font-size: 0.95rem;
+            font-weight: 500;
             cursor: pointer;
             border-bottom: 3px solid transparent;
-            transition: all 0.3s;
+            transition: all 0.2s;
+            color: #64748b;
+            white-space: nowrap;
         }}
         
         .tab-btn:hover {{
-            background: #f8f9fa;
+            color: #0f172a;
+            background: #f1f5f9;
         }}
         
         .tab-btn.active {{
-            border-bottom-color: #3498db;
-            color: #3498db;
-            font-weight: bold;
+            border-bottom-color: #0ea5e9;
+            color: #0ea5e9;
         }}
         
         .tab-content {{
@@ -615,119 +469,392 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         .tab-content.active {{
             display: block;
         }}
+        
+        .card {{
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+        }}
+        
+        .card-title {{
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }}
+        
+        .form-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }}
+        
+        .form-group {{
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }}
+        
+        .form-label {{
+            font-weight: 500;
+            font-size: 0.875rem;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+        }}
+        
+        .form-input {{
+            padding: 0.75rem 1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.2s;
+            font-family: inherit;
+            background: white;
+        }}
+        
+        .form-input:focus {{
+            outline: none;
+            border-color: #0ea5e9;
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+        }}
+        
+        .search-results {{
+            max-height: 240px;
+            overflow-y: auto;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            margin-top: 0.5rem;
+            display: none;
+            background: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }}
+        
+        .search-result {{
+            padding: 0.875rem 1rem;
+            cursor: pointer;
+            border-bottom: 1px solid #f1f5f9;
+            transition: background 0.15s;
+            font-size: 0.9rem;
+        }}
+        
+        .search-result:hover {{
+            background: #f8fafc;
+        }}
+        
+        .search-result:last-child {{
+            border-bottom: none;
+        }}
+        
+        .coordinates-display {{
+            font-family: 'Courier New', monospace;
+            background: #f1f5f9;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            color: #475569;
+            border: 2px solid #e2e8f0;
+        }}
+        
+        .btn-primary {{
+            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+            margin-top: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(14, 165, 233, 0.3);
+        }}
+        
+        .btn-primary:hover:not(:disabled) {{
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(14, 165, 233, 0.4);
+        }}
+        
+        .btn-primary:disabled {{
+            background: #cbd5e1;
+            cursor: not-allowed;
+            box-shadow: none;
+        }}
+        
+        .status-badge {{
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #dbeafe;
+            color: #1e40af;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 1.5rem;
+        }}
+        
+        .status-badge.success {{
+            background: #dcfce7;
+            color: #166534;
+        }}
+        
+        .results {{
+            display: none;
+        }}
+        
+        .results.show {{
+            display: block;
+        }}
+        
+        .result-card {{
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border: 2px solid #e2e8f0;
+            transition: all 0.2s;
+        }}
+        
+        .result-card:hover {{
+            border-color: #cbd5e1;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }}
+        
+        .result-card.primary {{
+            border-color: #0ea5e9;
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+        }}
+        
+        .result-header {{
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }}
+        
+        .result-value {{
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #0ea5e9;
+            margin: 0.5rem 0;
+            line-height: 1;
+        }}
+        
+        .result-subtitle {{
+            font-size: 1.125rem;
+            color: #64748b;
+            margin-bottom: 0.5rem;
+        }}
+        
+        .result-meta {{
+            color: #64748b;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }}
+        
+        .loading {{
+            text-align: center;
+            padding: 3rem;
+            color: #64748b;
+        }}
+        
+        .loading::after {{
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }}
+        
+        @keyframes dots {{
+            0%, 20% {{ content: '.'; }}
+            40% {{ content: '..'; }}
+            60%, 100% {{ content: '...'; }}
+        }}
+        
+        .error {{
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 1rem 1.25rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border-left: 4px solid #dc2626;
+            font-size: 0.9rem;
+        }}
+        
+        .cost-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }}
+        
+        .cost-item {{
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            border: 2px solid #e2e8f0;
+        }}
+        
+        .cost-year {{
+            font-weight: 600;
+            font-size: 1.125rem;
+            color: #0f172a;
+            margin-bottom: 0.5rem;
+        }}
+        
+        .cost-amount {{
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #0ea5e9;
+            margin-bottom: 0.25rem;
+        }}
+        
+        .cost-details {{
+            font-size: 0.8rem;
+            color: #64748b;
+        }}
+        
+        .metric-row {{
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #f1f5f9;
+        }}
+        
+        .metric-row:last-child {{
+            border-bottom: none;
+        }}
+        
+        .metric-label {{
+            color: #64748b;
+            font-size: 0.9rem;
+        }}
+        
+        .metric-value {{
+            font-weight: 600;
+            color: #0f172a;
+        }}
+        
+        @media (max-width: 768px) {{
+            .header h1 {{
+                font-size: 1.5rem;
+            }}
+            
+            .form-grid {{
+                grid-template-columns: 1fr;
+            }}
+            
+            .result-value {{
+                font-size: 2rem;
+            }}
+            
+            .cost-grid {{
+                grid-template-columns: 1fr;
+            }}
+        }}
     </style>
 </head>
 <body>
+    <div class="header">
+        <div class="header-content">
+            <h1>⚓ Maritime Distance & ETS Calculator</h1>
+            <p>Calculate shipping distances and EU Emissions Trading System costs</p>
+        </div>
+    </div>
+    
     <div class="container">
-        <div class="header">
-            <h1>🇪🇺 EU ETS Cost Calculator</h1>
-            <p>Local Distance Calculation Interface</p>
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('mrv')">💰 ETS Cost Calculation</button>
+            <button class="tab-btn" onclick="switchTab('distance')">🌊 Distance Calculation</button>
         </div>
         
-        <div class="content">
-            <!-- Tabs -->
-            <div class="tabs">
-                <button class="tab-btn active" onclick="switchTab('mrv')">💰 ETS Cost Calculation</button>
-                <button class="tab-btn" onclick="switchTab('distance')">🌊 Distance Calculation</button>
-            </div>
-            
-            <!-- MRV Tab (First) -->
-            <div id="mrv-tab" class="tab-content active">
-                <div class="form-section">
-                    <h2>🚢 Ship Information</h2>
-                    
-                    <div class="form-group">
-                        <label for="imo-number">IMO Number</label>
-                        <input type="text" id="imo-number" placeholder="Enter ship IMO number (e.g., 1013664)">
-                    </div>
-                    
-                    <h2>📍 Route Information</h2>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="mrv-origin-search">Origin Port</label>
-                            <input type="text" id="mrv-origin-search" placeholder="Search for origin port..." autocomplete="off">
-                            <div id="mrv-origin-results" class="search-results"></div>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="mrv-dest-search">Destination Port</label>
-                            <input type="text" id="mrv-dest-search" placeholder="Search for destination port..." autocomplete="off">
-                            <div id="mrv-dest-results" class="search-results"></div>
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Origin Coordinates</label>
-                            <div class="coordinates" id="mrv-origin-coords">Not selected</div>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>Destination Coordinates</label>
-                            <div class="coordinates" id="mrv-dest-coords">Not selected</div>
-                        </div>
-                    </div>
-                    
-                    <button class="calculate-btn" id="mrv-calculate-btn" onclick="calculateMRV()" disabled>
-                        💰 Calculate ETS Costs
-                    </button>
-                </div>
+        <!-- MRV Tab -->
+        <div id="mrv-tab" class="tab-content active">
+            <div class="card">
+                <h2 class="card-title">🚢 Ship Information</h2>
                 
-                <div id="mrv-status" class="status" style="display: none;">
-                    Java SeaRoute: {'Available' if JAVA_AVAILABLE else 'Not Available'}
-                </div>
-                
-                <div id="mrv-results" class="results">
-                    <h2>📊 ETS Cost Results</h2>
-                    <div id="mrv-results-content"></div>
+                <div class="form-group">
+                    <label class="form-label" for="imo-number">IMO Number</label>
+                    <input type="text" id="imo-number" class="form-input" placeholder="Enter ship IMO number (e.g., 1013664)">
                 </div>
             </div>
             
-            <!-- Distance Tab -->
-            <div id="distance-tab" class="tab-content">
-            <div class="form-section">
-                <h2>📍 Route Information</h2>
+            <div class="card">
+                <h2 class="card-title">📍 Route Information</h2>
                 
-                <div class="form-row">
+                <div class="form-grid">
                     <div class="form-group">
-                        <label for="origin-search">Origin Port</label>
-                        <input type="text" id="origin-search" placeholder="Search for origin port..." autocomplete="off">
+                        <label class="form-label" for="mrv-origin-search">Origin Port</label>
+                        <input type="text" id="mrv-origin-search" class="form-input" placeholder="Search for origin port..." autocomplete="off">
+                        <div id="mrv-origin-results" class="search-results"></div>
+                        <div class="coordinates-display" id="mrv-origin-coords">Not selected</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="mrv-dest-search">Destination Port</label>
+                        <input type="text" id="mrv-dest-search" class="form-input" placeholder="Search for destination port..." autocomplete="off">
+                        <div id="mrv-dest-results" class="search-results"></div>
+                        <div class="coordinates-display" id="mrv-dest-coords">Not selected</div>
+                    </div>
+                </div>
+                
+                <button class="btn-primary" id="mrv-calculate-btn" onclick="calculateMRV()" disabled>
+                    💰 Calculate ETS Costs
+                </button>
+            </div>
+            
+            <div class="status-badge {'success' if JAVA_AVAILABLE else ''}">
+                <span>{'✓' if JAVA_AVAILABLE else '⚠'}</span>
+                Java SeaRoute: {'Available' if JAVA_AVAILABLE else 'Not Available'}
+            </div>
+            
+            <div id="mrv-results" class="results">
+                <div id="mrv-results-content"></div>
+            </div>
+        </div>
+        
+        <!-- Distance Tab -->
+        <div id="distance-tab" class="tab-content">
+            <div class="card">
+                <h2 class="card-title">📍 Route Information</h2>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label" for="origin-search">Origin Port</label>
+                        <input type="text" id="origin-search" class="form-input" placeholder="Search for origin port..." autocomplete="off">
                         <div id="origin-results" class="search-results"></div>
+                        <div class="coordinates-display" id="origin-coords">Not selected</div>
                     </div>
                     
                     <div class="form-group">
-                        <label for="dest-search">Destination Port</label>
-                        <input type="text" id="dest-search" placeholder="Search for destination port..." autocomplete="off">
+                        <label class="form-label" for="dest-search">Destination Port</label>
+                        <input type="text" id="dest-search" class="form-input" placeholder="Search for destination port..." autocomplete="off">
                         <div id="dest-results" class="search-results"></div>
+                        <div class="coordinates-display" id="dest-coords">Not selected</div>
                     </div>
                 </div>
                 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Origin Coordinates</label>
-                        <div class="coordinates" id="origin-coords">Not selected</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Destination Coordinates</label>
-                        <div class="coordinates" id="dest-coords">Not selected</div>
-                    </div>
-                </div>
-                
-                <button class="calculate-btn" id="calculate-btn" onclick="calculateDistance()" disabled>
+                <button class="btn-primary" id="calculate-btn" onclick="calculateDistance()" disabled>
                     🌊 Calculate Distance
                 </button>
             </div>
             
-            <div id="status" class="status" style="display: none;">
-                Java SeaRoute: {'Available' if JAVA_AVAILABLE else 'Not Available (using fallback)'}
+            <div class="status-badge {'success' if JAVA_AVAILABLE else ''}">
+                <span>{'✓' if JAVA_AVAILABLE else '⚠'}</span>
+                Java SeaRoute: {'Available' if JAVA_AVAILABLE else 'Not Available'}
             </div>
             
             <div id="results" class="results">
-                <h2>📊 Distance Results</h2>
                 <div id="results-content"></div>
-            </div>
             </div>
         </div>
     </div>
@@ -735,6 +862,8 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
     <script>
         let selectedOrigin = null;
         let selectedDestination = null;
+        let selectedMRVOrigin = null;
+        let selectedMRVDestination = null;
         
         // Port search functionality
         document.getElementById('origin-search').addEventListener('input', function(e) {{
@@ -755,6 +884,30 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 document.getElementById('dest-results').style.display = 'none';
                 updateCalculateButton();
             }});
+        }});
+        
+        document.getElementById('mrv-origin-search').addEventListener('input', function(e) {{
+            searchPorts(e.target.value, 'mrv-origin-results', function(port) {{
+                selectedMRVOrigin = port;
+                document.getElementById('mrv-origin-coords').textContent = `${{port.lat.toFixed(4)}}, ${{port.lon.toFixed(4)}}`;
+                document.getElementById('mrv-origin-search').value = port.name;
+                document.getElementById('mrv-origin-results').style.display = 'none';
+                updateMRVCalculateButton();
+            }});
+        }});
+        
+        document.getElementById('mrv-dest-search').addEventListener('input', function(e) {{
+            searchPorts(e.target.value, 'mrv-dest-results', function(port) {{
+                selectedMRVDestination = port;
+                document.getElementById('mrv-dest-coords').textContent = `${{port.lat.toFixed(4)}}, ${{port.lon.toFixed(4)}}`;
+                document.getElementById('mrv-dest-search').value = port.name;
+                document.getElementById('mrv-dest-results').style.display = 'none';
+                updateMRVCalculateButton();
+            }});
+        }});
+        
+        document.getElementById('imo-number').addEventListener('input', function() {{
+            updateMRVCalculateButton();
         }});
         
         function searchPorts(query, resultsId, onSelect) {{
@@ -789,6 +942,20 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             btn.disabled = !selectedOrigin || !selectedDestination;
         }}
         
+        function updateMRVCalculateButton() {{
+            const imo = document.getElementById('imo-number').value;
+            const btn = document.getElementById('mrv-calculate-btn');
+            btn.disabled = !selectedMRVOrigin || !selectedMRVDestination || !imo;
+        }}
+        
+        function switchTab(tab) {{
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            
+            document.getElementById(tab + '-tab').classList.add('active');
+            event.target.classList.add('active');
+        }}
+        
         function calculateDistance() {{
             if (!selectedOrigin || !selectedDestination) return;
             
@@ -796,7 +963,7 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             const contentDiv = document.getElementById('results-content');
             
             resultsDiv.classList.add('show');
-            contentDiv.innerHTML = '<div class="loading">Calculating distances...</div>';
+            contentDiv.innerHTML = '<div class="loading">Calculating distances</div>';
             
             const url = `/api/calculate?origin_lat=${{selectedOrigin.lat}}&origin_lon=${{selectedOrigin.lon}}&dest_lat=${{selectedDestination.lat}}&dest_lon=${{selectedDestination.lon}}`;
             
@@ -814,105 +981,49 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             const contentDiv = document.getElementById('results-content');
             let html = '';
             
-            // Java SeaRoute results
             if (data.distance.success) {{
                 html += `
-                    <div class="result-method java">
-                        <div class="method-title">🚢 Distance (Java SeaRoute - Actual Shipping Routes)</div>
-                        <div class="distance-value java">${{data.distance.distance_nm}} nm</div>
-                        <div>(${{data.distance.distance_km}} km)</div>
-                        <div style="color: #7f8c8d; font-size: 0.9em;">Route complexity: ${{data.distance.route_complexity}} waypoints</div>
-                        <div style="color: #7f8c8d; font-size: 0.9em; margin-top: 10px;">Based on actual maritime shipping routes</div>
+                    <div class="result-card primary">
+                        <div class="result-header">🚢 Maritime Distance</div>
+                        <div class="result-value">${{data.distance.distance_nm.toFixed(1)}} <span style="font-size: 1.5rem; color: #64748b;">nm</span></div>
+                        <div class="result-subtitle">${{data.distance.distance_km.toFixed(1)}} kilometers</div>
+                        <div class="result-meta">Route complexity: ${{data.distance.route_complexity}} waypoints</div>
+                        <div class="result-meta">Method: Java SeaRoute (Actual Shipping Routes)</div>
                     </div>
                 `;
             }} else {{
-                html += `
-                    <div class="result-method">
-                        <div class="method-title">Java SeaRoute</div>
-                        <div class="error">${{data.distance.error}}</div>
-                    </div>
-                `;
+                html += `<div class="error">${{data.distance.error}}</div>`;
             }}
             
-            // ETS Coverage
             const originEea = selectedOrigin.is_eea;
             const destEea = selectedDestination.is_eea;
-            let coverage = 0;
             let coverageText = '';
             
             if (originEea && destEea) {{
-                coverage = 1.0;
                 coverageText = '100% (EEA to EEA)';
             }} else if (originEea || destEea) {{
-                coverage = 0.5;
                 coverageText = '50% (Mixed route)';
             }} else {{
-                coverage = 0.0;
                 coverageText = '0% (Non-EEA route)';
             }}
             
             html += `
-                <div class="result-method">
-                    <div class="method-title">ETS Coverage</div>
-                    <div style="font-size: 1.2em; font-weight: bold; color: #e74c3c;">${{coverageText}}</div>
-                    <div style="color: #7f8c8d; font-size: 0.9em;">
-                        Origin EEA: ${{originEea ? 'Yes' : 'No'}}, Destination EEA: ${{destEea ? 'Yes' : 'No'}}
+                <div class="result-card">
+                    <div class="result-header">🇪🇺 ETS Coverage</div>
+                    <div class="result-value" style="font-size: 2rem;">${{coverageText}}</div>
+                    <div class="metric-row">
+                        <span class="metric-label">Origin EEA Status</span>
+                        <span class="metric-value">${{originEea ? 'Yes' : 'No'}}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Destination EEA Status</span>
+                        <span class="metric-value">${{destEea ? 'Yes' : 'No'}}</span>
                     </div>
                 </div>
             `;
             
             contentDiv.innerHTML = html;
         }}
-        
-        // Show status
-        document.getElementById('status').style.display = 'block';
-        
-        // Tab switching
-        function switchTab(tab) {{
-            // Hide all tabs
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            
-            // Show selected tab
-            document.getElementById(tab + '-tab').classList.add('active');
-            event.target.classList.add('active');
-        }}
-        
-        // MRV tab variables
-        let selectedMRVOrigin = null;
-        let selectedMRVDestination = null;
-        
-        // MRV port search
-        document.getElementById('mrv-origin-search').addEventListener('input', function(e) {{
-            searchPorts(e.target.value, 'mrv-origin-results', function(port) {{
-                selectedMRVOrigin = port;
-                document.getElementById('mrv-origin-coords').textContent = `${{port.lat.toFixed(4)}}, ${{port.lon.toFixed(4)}}`;
-                document.getElementById('mrv-origin-search').value = port.name;
-                document.getElementById('mrv-origin-results').style.display = 'none';
-                updateMRVCalculateButton();
-            }});
-        }});
-        
-        document.getElementById('mrv-dest-search').addEventListener('input', function(e) {{
-            searchPorts(e.target.value, 'mrv-dest-results', function(port) {{
-                selectedMRVDestination = port;
-                document.getElementById('mrv-dest-coords').textContent = `${{port.lat.toFixed(4)}}, ${{port.lon.toFixed(4)}}`;
-                document.getElementById('mrv-dest-search').value = port.name;
-                document.getElementById('mrv-dest-results').style.display = 'none';
-                updateMRVCalculateButton();
-            }});
-        }});
-        
-        function updateMRVCalculateButton() {{
-            const imo = document.getElementById('imo-number').value;
-            const btn = document.getElementById('mrv-calculate-btn');
-            btn.disabled = !selectedMRVOrigin || !selectedMRVDestination || !imo;
-        }}
-        
-        // Listen for IMO number input
-        document.getElementById('imo-number').addEventListener('input', function() {{
-            updateMRVCalculateButton();
-        }});
         
         function calculateMRV() {{
             if (!selectedMRVOrigin || !selectedMRVDestination) return;
@@ -924,7 +1035,7 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             const contentDiv = document.getElementById('mrv-results-content');
             
             resultsDiv.classList.add('show');
-            contentDiv.innerHTML = '<div class="loading">Calculating ETS costs...</div>';
+            contentDiv.innerHTML = '<div class="loading">Calculating ETS costs</div>';
             
             const url = `/api/mrv?imo=${{imoNumber}}&origin_lat=${{selectedMRVOrigin.lat}}&origin_lon=${{selectedMRVOrigin.lon}}&dest_lat=${{selectedMRVDestination.lat}}&dest_lon=${{selectedMRVDestination.lon}}`;
             
@@ -945,59 +1056,72 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             if (data.error) {{
                 html = `<div class="error">${{data.error}}</div>`;
             }} else {{
-                // Ship information
                 html += `
-                    <div class="result-method">
-                        <div class="method-title">🚢 Ship Information</div>
-                        <div>IMO: <strong>${{data.imo_number}}</strong></div>
-                        <div>CO₂ per NM: <strong>${{data.ship_data.co2_per_nm.toFixed(2)}} kg/nm</strong></div>
-                        <div>CO₂eq per NM: <strong>${{data.ship_data.co2eq_per_nm.toFixed(2)}} kg/nm</strong></div>
+                    <div class="result-card">
+                        <div class="result-header">🚢 Ship Information</div>
+                        <div class="metric-row">
+                            <span class="metric-label">IMO Number</span>
+                            <span class="metric-value">${{data.imo_number}}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">CO₂ per Nautical Mile</span>
+                            <span class="metric-value">${{data.ship_data.co2_per_nm.toFixed(2)}} kg/nm</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">CO₂eq per Nautical Mile</span>
+                            <span class="metric-value">${{data.ship_data.co2eq_per_nm.toFixed(2)}} kg/nm</span>
+                        </div>
                     </div>
                 `;
                 
-                // Distance
                 if (data.distance.success) {{
                     html += `
-                        <div class="result-method">
-                            <div class="method-title">📏 Distance</div>
-                            <div class="distance-value">${{data.distance.distance_nm.toFixed(1)}} nm</div>
-                            <div>(${{data.distance.distance_km.toFixed(1)}} km)</div>
+                        <div class="result-card primary">
+                            <div class="result-header">📏 Distance</div>
+                            <div class="result-value">${{data.distance.distance_nm.toFixed(1)}} <span style="font-size: 1.5rem; color: #64748b;">nm</span></div>
+                            <div class="result-subtitle">${{data.distance.distance_km.toFixed(1)}} kilometers</div>
                         </div>
                     `;
                 }}
                 
-                // Emissions
                 html += `
-                    <div class="result-method">
-                        <div class="method-title">☁️ Total Emissions</div>
-                        <div>CO₂: <strong>${{data.emissions.co2_tonnes}} tonnes</strong></div>
-                        <div>CO₂eq: <strong>${{data.emissions.co2eq_tonnes}} tonnes</strong></div>
+                    <div class="result-card">
+                        <div class="result-header">☁️ Total Emissions</div>
+                        <div class="metric-row">
+                            <span class="metric-label">CO₂ Emissions</span>
+                            <span class="metric-value">${{data.emissions.co2_tonnes}} tonnes</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">CO₂eq Emissions</span>
+                            <span class="metric-value">${{data.emissions.co2eq_tonnes}} tonnes</span>
+                        </div>
                     </div>
-                `;
-                
-                // ETS Coverage
-                html += `
-                    <div class="result-method">
-                        <div class="method-title">🇪🇺 ETS Coverage</div>
-                        <div style="font-size: 1.2em; font-weight: bold; color: #e74c3c;">${{data.ets_coverage.description}}</div>
+                    
+                    <div class="result-card">
+                        <div class="result-header">🇪🇺 ETS Coverage</div>
+                        <div class="result-value" style="font-size: 2rem;">${{data.ets_coverage.description}}</div>
                     </div>
+                    
+                    <div class="result-card">
+                        <div class="result-header">💰 ETS Costs by Year</div>
+                        <div class="cost-grid">
                 `;
-                
-                // ETS Costs by Year
-                html += '<div class="result-method"><div class="method-title">💰 ETS Costs by Year</div>';
                 
                 for (const [year, costs] of Object.entries(data.ets_costs)) {{
                     html += `
-                        <div style="padding: 10px; margin: 5px 0; background: white; border-radius: 5px; border-left: 4px solid #3498db;">
-                            <strong>${{year}}:</strong> €${{costs.cost_eur.toFixed(2)}}
-                            <div style="font-size: 0.9em; color: #7f8c8d;">
-                                ${{costs.phase_in_pct}}% phase-in, €${{costs.eua_price_eur.toFixed(2)}}/tonne
-                            </div>
+                        <div class="cost-item">
+                            <div class="cost-year">${{year}}</div>
+                            <div class="cost-amount">€${{costs.cost_eur.toLocaleString()}}</div>
+                            <div class="cost-details">${{costs.phase_in_pct}}% phase-in</div>
+                            <div class="cost-details">€${{costs.eua_price_eur.toFixed(2)}}/tonne</div>
                         </div>
                     `;
                 }}
                 
-                html += '</div>';
+                html += `
+                        </div>
+                    </div>
+                `;
             }}
             
             contentDiv.innerHTML = html;
@@ -1015,19 +1139,19 @@ def main():
     print("EU ETS COST CALCULATOR - WEB SERVER")
     print("=" * 60)
     print(f"Java SeaRoute Available: {'Yes' if JAVA_AVAILABLE else 'No'}")
-    print(f"Starting server on port {PORT}...")
-    print(f"Open your browser and go to: http://localhost:{PORT}")
+    print(f"Starting server on port {{PORT}}...")
+    print(f"Open your browser and go to: http://localhost:{{PORT}}")
     print("Press Ctrl+C to stop the server")
     print("=" * 60)
     
     try:
         with socketserver.TCPServer(("", PORT), CalculatorHandler) as httpd:
-            print(f"Server running at http://0.0.0.0:{PORT}")
+            print(f"Server running at http://0.0.0.0:{{PORT}}")
             httpd.serve_forever()
     except KeyboardInterrupt:
-        print("\nServer stopped.")
+        print("\\nServer stopped.")
     except Exception as e:
-        print(f"Error starting server: {e}")
+        print(f"Error starting server: {{e}}")
 
 if __name__ == "__main__":
     main()
