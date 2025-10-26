@@ -627,58 +627,12 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         <div class="content">
             <!-- Tabs -->
             <div class="tabs">
-                <button class="tab-btn active" onclick="switchTab('distance')">🌊 Distance Calculation</button>
-                <button class="tab-btn" onclick="switchTab('mrv')">💰 ETS Cost Calculation</button>
+                <button class="tab-btn active" onclick="switchTab('mrv')">💰 ETS Cost Calculation</button>
+                <button class="tab-btn" onclick="switchTab('distance')">🌊 Distance Calculation</button>
             </div>
             
-            <!-- Distance Tab -->
-            <div id="distance-tab" class="tab-content active">
-            <div class="form-section">
-                <h2>📍 Route Information</h2>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="origin-search">Origin Port</label>
-                        <input type="text" id="origin-search" placeholder="Search for origin port..." autocomplete="off">
-                        <div id="origin-results" class="search-results"></div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="dest-search">Destination Port</label>
-                        <input type="text" id="dest-search" placeholder="Search for destination port..." autocomplete="off">
-                        <div id="dest-results" class="search-results"></div>
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Origin Coordinates</label>
-                        <div class="coordinates" id="origin-coords">Not selected</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label>Destination Coordinates</label>
-                        <div class="coordinates" id="dest-coords">Not selected</div>
-                    </div>
-                </div>
-                
-                <button class="calculate-btn" id="calculate-btn" onclick="calculateDistance()" disabled>
-                    🌊 Calculate Distance
-                </button>
-            </div>
-            
-            <div id="status" class="status" style="display: none;">
-                Java SeaRoute: {'Available' if JAVA_AVAILABLE else 'Not Available (using fallback)'}
-            </div>
-            
-            <div id="results" class="results">
-                <h2>📊 Distance Results</h2>
-                <div id="results-content"></div>
-            </div>
-            </div>
-            
-            <!-- MRV Tab -->
-            <div id="mrv-tab" class="tab-content">
+            <!-- MRV Tab (First) -->
+            <div id="mrv-tab" class="tab-content active">
                 <div class="form-section">
                     <h2>🚢 Ship Information</h2>
                     
@@ -728,6 +682,52 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                     <h2>📊 ETS Cost Results</h2>
                     <div id="mrv-results-content"></div>
                 </div>
+            </div>
+            
+            <!-- Distance Tab -->
+            <div id="distance-tab" class="tab-content">
+            <div class="form-section">
+                <h2>📍 Route Information</h2>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="origin-search">Origin Port</label>
+                        <input type="text" id="origin-search" placeholder="Search for origin port..." autocomplete="off">
+                        <div id="origin-results" class="search-results"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="dest-search">Destination Port</label>
+                        <input type="text" id="dest-search" placeholder="Search for destination port..." autocomplete="off">
+                        <div id="dest-results" class="search-results"></div>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Origin Coordinates</label>
+                        <div class="coordinates" id="origin-coords">Not selected</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Destination Coordinates</label>
+                        <div class="coordinates" id="dest-coords">Not selected</div>
+                    </div>
+                </div>
+                
+                <button class="calculate-btn" id="calculate-btn" onclick="calculateDistance()" disabled>
+                    🌊 Calculate Distance
+                </button>
+            </div>
+            
+            <div id="status" class="status" style="display: none;">
+                Java SeaRoute: {'Available' if JAVA_AVAILABLE else 'Not Available (using fallback)'}
+            </div>
+            
+            <div id="results" class="results">
+                <h2>📊 Distance Results</h2>
+                <div id="results-content"></div>
+            </div>
             </div>
         </div>
     </div>
