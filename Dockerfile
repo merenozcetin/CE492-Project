@@ -30,4 +30,5 @@ EXPOSE 8080
 
 # Run the application
 WORKDIR /app/server
+
 CMD ["python3", "app.py"]
