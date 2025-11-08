@@ -22,6 +22,12 @@ import urllib.request
 import urllib.error
 from datetime import datetime
 
+try:
+    import openrouteservice as ors
+    ORS_AVAILABLE = True
+except ImportError:
+    ORS_AVAILABLE = False
+
 # Add tools directory to path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'tools'))
 # Set current directory to server directory
@@ -342,6 +348,9 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
     def handle_road_distance(self):
         """Handle road distance calculation using OpenRouteService API"""
         try:
+            if not ORS_AVAILABLE:
+                raise Exception("OpenRouteService library not available. Please install: pip install openrouteservice")
+            
             # Parse query parameters
             query_params = urllib.parse.parse_qs(self.path.split('?')[1])
             
@@ -353,47 +362,23 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             # OpenRouteService API key
             api_key = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjljYzg0MGUwOGMzODQ0ODQ4OWI0ZTJkMWMzODcwOGM4IiwiaCI6Im11cm11cjY0In0="
             
-            # OpenRouteService Directions API endpoint
-            url = "https://api.openrouteservice.org/v2/directions/driving-car"
+            # Initialize OpenRouteService client
+            client = ors.Client(key=api_key)
             
-            # Request body - coordinates must be [longitude, latitude]
-            body = {
-                "coordinates": [[origin_lon, origin_lat], [dest_lon, dest_lat]],
-                "units": "km"
-            }
+            # Coordinates format: [longitude, latitude]
+            start_coords = [origin_lon, origin_lat]
+            end_coords = [dest_lon, dest_lat]
             
-            # Create request
-            data = json.dumps(body).encode('utf-8')
-            req = urllib.request.Request(url, data=data, method='POST')
-            req.add_header('Content-Type', 'application/json')
-            # Try with Bearer prefix first, fallback to direct key if needed
-            req.add_header('Authorization', f'Bearer {api_key}')
-            
-            # Make API call with better error handling
-            try:
-                with urllib.request.urlopen(req, timeout=30) as response:
-                    response_data = json.loads(response.read().decode('utf-8'))
-            except urllib.error.HTTPError as e:
-                # Read error response body
-                error_body = e.read().decode('utf-8')
-                try:
-                    error_data = json.loads(error_body)
-                    error_msg = error_data.get('error', {}).get('message', error_body)
-                except:
-                    error_msg = error_body or str(e)
-                raise Exception(f"OpenRouteService API error ({e.code}): {error_msg}")
-            except urllib.error.URLError as e:
-                raise Exception(f"Network error: {str(e)}")
-            
-            # Check for API errors in response
-            if 'error' in response_data:
-                error_info = response_data.get('error', {})
-                error_msg = error_info.get('message', 'Unknown API error')
-                raise Exception(f"OpenRouteService API error: {error_msg}")
+            # Calculate route
+            routes = client.directions(
+                coordinates=[start_coords, end_coords],
+                profile='driving-car',
+                format='json'
+            )
             
             # Parse response
-            if 'routes' in response_data and len(response_data['routes']) > 0:
-                route = response_data['routes'][0]
+            if 'routes' in routes and len(routes['routes']) > 0:
+                route = routes['routes'][0]
                 distance_m = route['summary']['distance']  # Distance in meters
                 duration_s = route['summary']['duration']  # Duration in seconds
                 distance_km = distance_m / 1000
@@ -423,6 +408,15 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(result).encode())
             
+        except ors.exceptions.ApiError as e:
+            # Log error for debugging
+            print(f"OpenRouteService API error: {str(e)}")
+            error_response = {'success': False, 'error': f"API Error: {str(e)}"}
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(error_response).encode())
         except Exception as e:
             # Log error for debugging
             print(f"Road distance calculation error: {str(e)}")
