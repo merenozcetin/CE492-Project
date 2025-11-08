@@ -942,17 +942,23 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 
                 <div class="form-grid">
                     <div class="form-group">
-                        <label class="form-label" for="road-origin-search">Origin Location</label>
-                        <input type="text" id="road-origin-search" class="form-input" placeholder="Search for origin location..." autocomplete="off">
-                        <div id="road-origin-results" class="search-results"></div>
-                        <div class="coordinates-display" id="road-origin-coords">Not selected</div>
+                        <label class="form-label" for="road-origin-lat">Origin Latitude</label>
+                        <input type="number" id="road-origin-lat" class="form-input" placeholder="e.g., 41.0082" step="any">
                     </div>
                     
                     <div class="form-group">
-                        <label class="form-label" for="road-dest-search">Destination Location</label>
-                        <input type="text" id="road-dest-search" class="form-input" placeholder="Search for destination location..." autocomplete="off">
-                        <div id="road-dest-results" class="search-results"></div>
-                        <div class="coordinates-display" id="road-dest-coords">Not selected</div>
+                        <label class="form-label" for="road-origin-lon">Origin Longitude</label>
+                        <input type="number" id="road-origin-lon" class="form-input" placeholder="e.g., 28.9784" step="any">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="road-dest-lat">Destination Latitude</label>
+                        <input type="number" id="road-dest-lat" class="form-input" placeholder="e.g., 40.7128" step="any">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="road-dest-lon">Destination Longitude</label>
+                        <input type="number" id="road-dest-lon" class="form-input" placeholder="e.g., -74.0060" step="any">
                     </div>
                 </div>
                 
@@ -972,8 +978,6 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         let selectedDestination = null;
         let selectedMRVOrigin = null;
         let selectedMRVDestination = null;
-        let selectedRoadOrigin = null;
-        let selectedRoadDestination = null;
         
         // Port search functionality
         document.getElementById('origin-search').addEventListener('input', function(e) {{
@@ -1020,25 +1024,11 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             updateMRVCalculateButton();
         }});
         
-        document.getElementById('road-origin-search').addEventListener('input', function(e) {{
-            searchPorts(e.target.value, 'road-origin-results', function(port) {{
-                selectedRoadOrigin = port;
-                document.getElementById('road-origin-coords').textContent = `${{port.lat.toFixed(4)}}, ${{port.lon.toFixed(4)}}`;
-                document.getElementById('road-origin-search').value = port.name;
-                document.getElementById('road-origin-results').style.display = 'none';
-                updateRoadCalculateButton();
-            }});
-        }});
-        
-        document.getElementById('road-dest-search').addEventListener('input', function(e) {{
-            searchPorts(e.target.value, 'road-dest-results', function(port) {{
-                selectedRoadDestination = port;
-                document.getElementById('road-dest-coords').textContent = `${{port.lat.toFixed(4)}}, ${{port.lon.toFixed(4)}}`;
-                document.getElementById('road-dest-search').value = port.name;
-                document.getElementById('road-dest-results').style.display = 'none';
-                updateRoadCalculateButton();
-            }});
-        }});
+        // Road distance coordinate inputs
+        document.getElementById('road-origin-lat').addEventListener('input', updateRoadCalculateButton);
+        document.getElementById('road-origin-lon').addEventListener('input', updateRoadCalculateButton);
+        document.getElementById('road-dest-lat').addEventListener('input', updateRoadCalculateButton);
+        document.getElementById('road-dest-lon').addEventListener('input', updateRoadCalculateButton);
         
         function searchPorts(query, resultsId, onSelect) {{
             if (query.length < 2) {{
@@ -1079,8 +1069,22 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         }}
         
         function updateRoadCalculateButton() {{
+            const originLat = document.getElementById('road-origin-lat').value;
+            const originLon = document.getElementById('road-origin-lon').value;
+            const destLat = document.getElementById('road-dest-lat').value;
+            const destLon = document.getElementById('road-dest-lon').value;
             const btn = document.getElementById('road-calculate-btn');
-            btn.disabled = !selectedRoadOrigin || !selectedRoadDestination;
+            
+            // Validate coordinates are numbers and within valid ranges
+            const isValid = originLat && originLon && destLat && destLon &&
+                           !isNaN(parseFloat(originLat)) && !isNaN(parseFloat(originLon)) &&
+                           !isNaN(parseFloat(destLat)) && !isNaN(parseFloat(destLon)) &&
+                           parseFloat(originLat) >= -90 && parseFloat(originLat) <= 90 &&
+                           parseFloat(originLon) >= -180 && parseFloat(originLon) <= 180 &&
+                           parseFloat(destLat) >= -90 && parseFloat(destLat) <= 90 &&
+                           parseFloat(destLon) >= -180 && parseFloat(destLon) <= 180;
+            
+            btn.disabled = !isValid;
         }}
         
         function switchTab(tab) {{
@@ -1271,7 +1275,14 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         }}
         
         function calculateRoadDistance() {{
-            if (!selectedRoadOrigin || !selectedRoadDestination) return;
+            const originLat = parseFloat(document.getElementById('road-origin-lat').value);
+            const originLon = parseFloat(document.getElementById('road-origin-lon').value);
+            const destLat = parseFloat(document.getElementById('road-dest-lat').value);
+            const destLon = parseFloat(document.getElementById('road-dest-lon').value);
+            
+            if (isNaN(originLat) || isNaN(originLon) || isNaN(destLat) || isNaN(destLon)) {{
+                return;
+            }}
             
             const resultsDiv = document.getElementById('road-results');
             const contentDiv = document.getElementById('road-results-content');
@@ -1279,7 +1290,7 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             resultsDiv.classList.add('show');
             contentDiv.innerHTML = '<div class="loading">Calculating road distance</div>';
             
-            const url = `/api/road-distance?origin_lat=${{selectedRoadOrigin.lat}}&origin_lon=${{selectedRoadOrigin.lon}}&dest_lat=${{selectedRoadDestination.lat}}&dest_lon=${{selectedRoadDestination.lon}}`;
+            const url = `/api/road-distance?origin_lat=${{originLat}}&origin_lon=${{originLon}}&dest_lat=${{destLat}}&dest_lon=${{destLon}}`;
             
             fetch(url)
                 .then(response => response.json())
