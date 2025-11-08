@@ -366,7 +366,8 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             data = json.dumps(body).encode('utf-8')
             req = urllib.request.Request(url, data=data, method='POST')
             req.add_header('Content-Type', 'application/json')
-            req.add_header('Authorization', api_key)
+            # Try with Bearer prefix first, fallback to direct key if needed
+            req.add_header('Authorization', f'Bearer {api_key}')
             
             # Make API call with better error handling
             try:
