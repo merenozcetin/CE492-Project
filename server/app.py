@@ -19,6 +19,7 @@ import sys
 import urllib.parse
 import math
 import urllib.request
+import urllib.error
 from datetime import datetime
 
 # Add tools directory to path
@@ -353,9 +354,9 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             api_key = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjljYzg0MGUwOGMzODQ0ODQ4OWI0ZTJkMWMzODcwOGM4IiwiaCI6Im11cm11cjY0In0="
             
             # OpenRouteService Directions API endpoint
-            url = f"https://api.openrouteservice.org/v2/directions/driving-car"
+            url = "https://api.openrouteservice.org/v2/directions/driving-car"
             
-            # Request body
+            # Request body - coordinates must be [longitude, latitude]
             body = {
                 "coordinates": [[origin_lon, origin_lat], [dest_lon, dest_lat]],
                 "units": "km"
@@ -363,13 +364,31 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             
             # Create request
             data = json.dumps(body).encode('utf-8')
-            req = urllib.request.Request(url, data=data)
+            req = urllib.request.Request(url, data=data, method='POST')
             req.add_header('Content-Type', 'application/json')
             req.add_header('Authorization', api_key)
             
-            # Make API call
-            with urllib.request.urlopen(req, timeout=30) as response:
-                response_data = json.loads(response.read().decode('utf-8'))
+            # Make API call with better error handling
+            try:
+                with urllib.request.urlopen(req, timeout=30) as response:
+                    response_data = json.loads(response.read().decode('utf-8'))
+            except urllib.error.HTTPError as e:
+                # Read error response body
+                error_body = e.read().decode('utf-8')
+                try:
+                    error_data = json.loads(error_body)
+                    error_msg = error_data.get('error', {}).get('message', error_body)
+                except:
+                    error_msg = error_body or str(e)
+                raise Exception(f"OpenRouteService API error ({e.code}): {error_msg}")
+            except urllib.error.URLError as e:
+                raise Exception(f"Network error: {str(e)}")
+            
+            # Check for API errors in response
+            if 'error' in response_data:
+                error_info = response_data.get('error', {})
+                error_msg = error_info.get('message', 'Unknown API error')
+                raise Exception(f"OpenRouteService API error: {error_msg}")
             
             # Parse response
             if 'routes' in response_data and len(response_data['routes']) > 0:
@@ -394,7 +413,7 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                     'geometry': route.get('geometry', '')  # Encoded polyline for route visualization
                 }
             else:
-                raise Exception("No route found")
+                raise Exception("No route found in API response")
             
             # Send JSON response
             self.send_response(200)
@@ -404,6 +423,8 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(result).encode())
             
         except Exception as e:
+            # Log error for debugging
+            print(f"Road distance calculation error: {str(e)}")
             error_response = {'success': False, 'error': str(e)}
             self.send_response(500)
             self.send_header('Content-type', 'application/json')
