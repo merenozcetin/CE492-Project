@@ -18,6 +18,7 @@ import os
 import sys
 import urllib.parse
 import math
+import urllib.request
 from datetime import datetime
 
 # Add tools directory to path
@@ -41,6 +42,8 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_mrv_calculation()
         elif self.path.startswith('/api/ports'):
             self.handle_port_search()
+        elif self.path.startswith('/api/road-distance'):
+            self.handle_road_distance()
         else:
             super().do_GET()
     
@@ -329,6 +332,79 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             
         except Exception as e:
             error_response = {'error': str(e)}
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(error_response).encode())
+    
+    def handle_road_distance(self):
+        """Handle road distance calculation using OpenRouteService API"""
+        try:
+            # Parse query parameters
+            query_params = urllib.parse.parse_qs(self.path.split('?')[1])
+            
+            origin_lat = float(query_params['origin_lat'][0])
+            origin_lon = float(query_params['origin_lon'][0])
+            dest_lat = float(query_params['dest_lat'][0])
+            dest_lon = float(query_params['dest_lon'][0])
+            
+            # OpenRouteService API key
+            api_key = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjljYzg0MGUwOGMzODQ0ODQ4OWI0ZTJkMWMzODcwOGM4IiwiaCI6Im11cm11cjY0In0="
+            
+            # OpenRouteService Directions API endpoint
+            url = f"https://api.openrouteservice.org/v2/directions/driving-car"
+            
+            # Request body
+            body = {
+                "coordinates": [[origin_lon, origin_lat], [dest_lon, dest_lat]],
+                "units": "km"
+            }
+            
+            # Create request
+            data = json.dumps(body).encode('utf-8')
+            req = urllib.request.Request(url, data=data)
+            req.add_header('Content-Type', 'application/json')
+            req.add_header('Authorization', api_key)
+            
+            # Make API call
+            with urllib.request.urlopen(req, timeout=30) as response:
+                response_data = json.loads(response.read().decode('utf-8'))
+            
+            # Parse response
+            if 'routes' in response_data and len(response_data['routes']) > 0:
+                route = response_data['routes'][0]
+                distance_m = route['summary']['distance']  # Distance in meters
+                duration_s = route['summary']['duration']  # Duration in seconds
+                distance_km = distance_m / 1000
+                distance_miles = distance_km * 0.621371
+                
+                # Convert duration to hours and minutes
+                hours = int(duration_s // 3600)
+                minutes = int((duration_s % 3600) // 60)
+                
+                result = {
+                    'success': True,
+                    'distance_km': round(distance_km, 2),
+                    'distance_miles': round(distance_miles, 2),
+                    'distance_meters': round(distance_m, 0),
+                    'duration_seconds': round(duration_s, 0),
+                    'duration_hours': hours,
+                    'duration_minutes': minutes,
+                    'geometry': route.get('geometry', '')  # Encoded polyline for route visualization
+                }
+            else:
+                raise Exception("No route found")
+            
+            # Send JSON response
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode())
+            
+        except Exception as e:
+            error_response = {'success': False, 'error': str(e)}
             self.send_response(500)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
@@ -775,6 +851,7 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         <div class="tabs">
             <button class="tab-btn active" onclick="switchTab('mrv')">💰 ETS Cost Calculation</button>
             <button class="tab-btn" onclick="switchTab('distance')">🌊 Distance Calculation</button>
+            <button class="tab-btn" onclick="switchTab('road')">🛣️ Road Distance Calculator</button>
         </div>
         
         <!-- MRV Tab -->
@@ -857,6 +934,37 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 <div id="results-content"></div>
             </div>
         </div>
+        
+        <!-- Road Distance Tab -->
+        <div id="road-tab" class="tab-content">
+            <div class="card">
+                <h2 class="card-title">🛣️ Road Route Information</h2>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label" for="road-origin-search">Origin Location</label>
+                        <input type="text" id="road-origin-search" class="form-input" placeholder="Search for origin location..." autocomplete="off">
+                        <div id="road-origin-results" class="search-results"></div>
+                        <div class="coordinates-display" id="road-origin-coords">Not selected</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="road-dest-search">Destination Location</label>
+                        <input type="text" id="road-dest-search" class="form-input" placeholder="Search for destination location..." autocomplete="off">
+                        <div id="road-dest-results" class="search-results"></div>
+                        <div class="coordinates-display" id="road-dest-coords">Not selected</div>
+                    </div>
+                </div>
+                
+                <button class="btn-primary" id="road-calculate-btn" onclick="calculateRoadDistance()" disabled>
+                    🛣️ Calculate Road Distance
+                </button>
+            </div>
+            
+            <div id="road-results" class="results">
+                <div id="road-results-content"></div>
+            </div>
+        </div>
     </div>
     
     <script>
@@ -864,6 +972,8 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         let selectedDestination = null;
         let selectedMRVOrigin = null;
         let selectedMRVDestination = null;
+        let selectedRoadOrigin = null;
+        let selectedRoadDestination = null;
         
         // Port search functionality
         document.getElementById('origin-search').addEventListener('input', function(e) {{
@@ -910,6 +1020,26 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             updateMRVCalculateButton();
         }});
         
+        document.getElementById('road-origin-search').addEventListener('input', function(e) {{
+            searchPorts(e.target.value, 'road-origin-results', function(port) {{
+                selectedRoadOrigin = port;
+                document.getElementById('road-origin-coords').textContent = `${{port.lat.toFixed(4)}}, ${{port.lon.toFixed(4)}}`;
+                document.getElementById('road-origin-search').value = port.name;
+                document.getElementById('road-origin-results').style.display = 'none';
+                updateRoadCalculateButton();
+            }});
+        }});
+        
+        document.getElementById('road-dest-search').addEventListener('input', function(e) {{
+            searchPorts(e.target.value, 'road-dest-results', function(port) {{
+                selectedRoadDestination = port;
+                document.getElementById('road-dest-coords').textContent = `${{port.lat.toFixed(4)}}, ${{port.lon.toFixed(4)}}`;
+                document.getElementById('road-dest-search').value = port.name;
+                document.getElementById('road-dest-results').style.display = 'none';
+                updateRoadCalculateButton();
+            }});
+        }});
+        
         function searchPorts(query, resultsId, onSelect) {{
             if (query.length < 2) {{
                 document.getElementById(resultsId).style.display = 'none';
@@ -946,6 +1076,11 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             const imo = document.getElementById('imo-number').value;
             const btn = document.getElementById('mrv-calculate-btn');
             btn.disabled = !selectedMRVOrigin || !selectedMRVDestination || !imo;
+        }}
+        
+        function updateRoadCalculateButton() {{
+            const btn = document.getElementById('road-calculate-btn');
+            btn.disabled = !selectedRoadOrigin || !selectedRoadDestination;
         }}
         
         function switchTab(tab) {{
@@ -1130,6 +1265,76 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                         </div>
                     </div>
                 `;
+            }}
+            
+            contentDiv.innerHTML = html;
+        }}
+        
+        function calculateRoadDistance() {{
+            if (!selectedRoadOrigin || !selectedRoadDestination) return;
+            
+            const resultsDiv = document.getElementById('road-results');
+            const contentDiv = document.getElementById('road-results-content');
+            
+            resultsDiv.classList.add('show');
+            contentDiv.innerHTML = '<div class="loading">Calculating road distance</div>';
+            
+            const url = `/api/road-distance?origin_lat=${{selectedRoadOrigin.lat}}&origin_lon=${{selectedRoadOrigin.lon}}&dest_lat=${{selectedRoadDestination.lat}}&dest_lon=${{selectedRoadDestination.lon}}`;
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {{
+                    displayRoadResults(data);
+                }})
+                .catch(error => {{
+                    contentDiv.innerHTML = `<div class="error">Error: ${{error.message}}</div>`;
+                }});
+        }}
+        
+        function displayRoadResults(data) {{
+            const contentDiv = document.getElementById('road-results-content');
+            let html = '';
+            
+            if (data.success) {{
+                const durationText = data.duration_hours > 0 
+                    ? `${{data.duration_hours}}h ${{data.duration_minutes}}m`
+                    : `${{data.duration_minutes}}m`;
+                
+                html += `
+                    <div class="result-card primary">
+                        <div class="result-header">🛣️ Road Distance</div>
+                        <div class="result-value">${{data.distance_km.toFixed(1)}} <span style="font-size: 1.5rem; color: #64748b;">km</span></div>
+                        <div class="result-subtitle">${{data.distance_miles.toFixed(1)}} miles</div>
+                        <div class="result-meta">Estimated driving time: ${{durationText}}</div>
+                        <div class="result-meta">Method: OpenRouteService (Driving Routes)</div>
+                    </div>
+                    
+                    <div class="result-card">
+                        <div class="result-header">📍 Route Details</div>
+                        <div class="metric-row">
+                            <span class="metric-label">Distance (Kilometers)</span>
+                            <span class="metric-value">${{data.distance_km.toFixed(2)}} km</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Distance (Miles)</span>
+                            <span class="metric-value">${{data.distance_miles.toFixed(2)}} mi</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Distance (Meters)</span>
+                            <span class="metric-value">${{data.distance_meters.toLocaleString()}} m</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Estimated Duration</span>
+                            <span class="metric-value">${{durationText}}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Duration (Seconds)</span>
+                            <span class="metric-value">${{data.duration_seconds.toLocaleString()}} s</span>
+                        </div>
+                    </div>
+                `;
+            }} else {{
+                html += `<div class="error">Error: ${{data.error || 'Failed to calculate road distance'}}</div>`;
             }}
             
             contentDiv.innerHTML = html;
