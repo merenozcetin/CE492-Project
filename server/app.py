@@ -103,17 +103,29 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             sea_fuels = set()
             
             for key, data in sea_factors.items():
-                sea_vessel_types.add(data['vessel_type'])
-                sea_sizes.add(data['size'])
-                sea_fuels.add(data['fuel'])
+                vessel_type = data.get('vessel_type', '').strip()
+                size = data.get('size', '').strip()
+                fuel = data.get('fuel', '').strip()
+                
+                if vessel_type:
+                    sea_vessel_types.add(vessel_type)
+                if size:
+                    sea_sizes.add(size)
+                if fuel:
+                    sea_fuels.add(fuel)
             
             # Extract unique modes and fuels for road transport
             road_modes = set()
             road_fuels = set()
             
             for key, data in road_factors.items():
-                road_modes.add(data['mode'])
-                road_fuels.add(data['fuel'])
+                mode = data.get('mode', '').strip()
+                fuel = data.get('fuel', '').strip()
+                
+                if mode:
+                    road_modes.add(mode)
+                if fuel:
+                    road_fuels.add(fuel)
             
             result = {
                 'sea': {
@@ -280,7 +292,16 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                     vessel_type = row.get('Vessel Characteristics', '').strip()
                     size = row.get('Size', '').strip()
                     fuel = row.get('Fuel', '').strip()
-                    emission_factor = float(row.get('Emission intensity (g CO2e/t-km)', 0))
+                    emission_str = row.get('Emission intensity (g CO2e/t-km)', '').strip()
+                    
+                    # Skip empty rows
+                    if not vessel_type or not size or not fuel or not emission_str:
+                        continue
+                    
+                    try:
+                        emission_factor = float(emission_str)
+                    except ValueError:
+                        continue
                     
                     key = f"{vessel_type}|{size}|{fuel}"
                     sea_factors[key] = {
@@ -289,10 +310,15 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                         'fuel': fuel,
                         'emission_factor': emission_factor  # g CO2e/t-km
                     }
-            print(f"Loaded {len(sea_factors)} sea emission factor records")
+            print(f"Loaded {len(sea_factors)} sea emission factor records", flush=True)
+            if len(sea_factors) > 0:
+                first_key = list(sea_factors.keys())[0]
+                print(f"Sample sea factor: {sea_factors[first_key]}", flush=True)
             return sea_factors
         except Exception as e:
-            print(f"Error loading sea emission factors: {e}")
+            print(f"Error loading sea emission factors: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
             return {}
     
     def load_road_emission_factors(self):
@@ -304,7 +330,16 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 for row in reader:
                     mode = row.get('Mode', '').strip()
                     fuel = row.get('Fuel', '').strip()
-                    emission_factor = float(row.get('Emission intensity (g CO2e/t-km)', 0))
+                    emission_str = row.get('Emission intensity (g CO2e/t-km)', '').strip()
+                    
+                    # Skip empty rows
+                    if not mode or not fuel or not emission_str:
+                        continue
+                    
+                    try:
+                        emission_factor = float(emission_str)
+                    except ValueError:
+                        continue
                     
                     key = f"{mode}|{fuel}"
                     road_factors[key] = {
@@ -312,10 +347,15 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                         'fuel': fuel,
                         'emission_factor': emission_factor  # g CO2e/t-km
                     }
-            print(f"Loaded {len(road_factors)} road emission factor records")
+            print(f"Loaded {len(road_factors)} road emission factor records", flush=True)
+            if len(road_factors) > 0:
+                first_key = list(road_factors.keys())[0]
+                print(f"Sample road factor: {road_factors[first_key]}", flush=True)
             return road_factors
         except Exception as e:
-            print(f"Error loading road emission factors: {e}")
+            print(f"Error loading road emission factors: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
             return {}
     
     def handle_mrv_calculation(self):
