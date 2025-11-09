@@ -1256,15 +1256,15 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         // Load transport options on page load
         fetch('/api/transport-options')
             .then(response => response.json())
-            .then(data => {
+            .then(data => {{
                 transportOptions = data;
                 populateTransportOptions();
-            })
-            .catch(error => {
+            }})
+            .catch(error => {{
                 console.error('Error loading transport options:', error);
-            });
+            }});
         
-        function populateTransportOptions() {
+        function populateTransportOptions() {{
             if (!transportOptions) return;
             
             // Populate sea transport options
@@ -1272,64 +1272,64 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             const vesselSizeSelect = document.getElementById('vessel-size');
             const seaFuelSelect = document.getElementById('sea-fuel');
             
-            transportOptions.sea.vessel_types.forEach(type => {
+            transportOptions.sea.vessel_types.forEach(type => {{
                 const option = document.createElement('option');
                 option.value = type;
                 option.textContent = type;
                 vesselTypeSelect.appendChild(option);
-            });
+            }});
             
-            transportOptions.sea.sizes.forEach(size => {
+            transportOptions.sea.sizes.forEach(size => {{
                 const option = document.createElement('option');
                 option.value = size;
                 option.textContent = size;
                 vesselSizeSelect.appendChild(option);
-            });
+            }});
             
-            transportOptions.sea.fuels.forEach(fuel => {
+            transportOptions.sea.fuels.forEach(fuel => {{
                 const option = document.createElement('option');
                 option.value = fuel;
                 option.textContent = fuel;
                 seaFuelSelect.appendChild(option);
-            });
+            }});
             
             // Populate road transport options
             const roadModeSelect = document.getElementById('road-mode');
             const roadFuelSelect = document.getElementById('road-fuel');
             
-            transportOptions.road.modes.forEach(mode => {
+            transportOptions.road.modes.forEach(mode => {{
                 const option = document.createElement('option');
                 option.value = mode;
                 option.textContent = mode;
                 roadModeSelect.appendChild(option);
-            });
+            }});
             
-            transportOptions.road.fuels.forEach(fuel => {
+            transportOptions.road.fuels.forEach(fuel => {{
                 const option = document.createElement('option');
                 option.value = fuel;
                 option.textContent = fuel;
                 roadFuelSelect.appendChild(option);
-            });
-        }
+            }});
+        }}
         
-        function updateTransportFields() {
+        function updateTransportFields() {{
             const transportMode = document.getElementById('transport-mode').value;
             const seaFields = document.getElementById('sea-fields');
             const roadFields = document.getElementById('road-fields');
             
-            if (transportMode === 'sea') {
+            if (transportMode === 'sea') {{
                 seaFields.style.display = 'block';
                 roadFields.style.display = 'none';
-            } else if (transportMode === 'road') {
+            }} else if (transportMode === 'road') {{
                 seaFields.style.display = 'none';
                 roadFields.style.display = 'block';
-            } else {
+            }} else {{
                 seaFields.style.display = 'none';
                 roadFields.style.display = 'none';
-            }
+            }}
             
             updateMRVCalculateButton();
-        }
+        }}
         
         // Port search functionality
         document.getElementById('origin-search').addEventListener('input', function(e) {{
