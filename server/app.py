@@ -1258,23 +1258,26 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         let selectedMRVDestination = null;
         let transportOptions = null;
         
-        // Load transport options on page load
-        fetch('/api/transport-options')
-            .then(response => {{
-                if (!response.ok) {{
-                    throw new Error(`HTTP error! status: ${{response.status}}`);
-                }}
-                return response.json();
-            }})
-            .then(data => {{
-                console.log('Transport options loaded:', data);
-                transportOptions = data;
-                populateTransportOptions();
-            }})
-            .catch(error => {{
-                console.error('Error loading transport options:', error);
-                alert('Failed to load transport options. Please refresh the page.');
-            }});
+        // Load transport options when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {{
+            console.log('DOM loaded, fetching transport options...');
+            fetch('/api/transport-options')
+                .then(response => {{
+                    if (!response.ok) {{
+                        throw new Error(`HTTP error! status: ${{response.status}}`);
+                    }}
+                    return response.json();
+                }})
+                .then(data => {{
+                    console.log('Transport options loaded:', data);
+                    transportOptions = data;
+                    populateTransportOptions();
+                }})
+                .catch(error => {{
+                    console.error('Error loading transport options:', error);
+                    alert('Failed to load transport options. Please refresh the page.');
+                }});
+        }});
         
         function populateTransportOptions() {{
             if (!transportOptions) {{
