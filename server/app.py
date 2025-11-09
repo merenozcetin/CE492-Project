@@ -288,19 +288,40 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             sea_factors = {}
             with open('data/sea.csv', 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
-                for row in reader:
-                    vessel_type = row.get('Vessel Characteristics', '').strip()
-                    size = row.get('Size', '').strip()
-                    fuel = row.get('Fuel', '').strip()
-                    emission_str = row.get('Emission intensity (g CO2e/t-km)', '').strip()
+                print(f"CSV columns: {reader.fieldnames}", flush=True)
+                for row_num, row in enumerate(reader, start=2):
+                    # Try different possible column name variations
+                    vessel_type = (row.get('Vessel Characteristics', '') or 
+                                  row.get('Vessel Characteristics', '') or
+                                  row.get('vessel characteristics', '') or
+                                  row.get('VESSEL CHARACTERISTICS', '')).strip()
+                    size = (row.get('Size', '') or 
+                           row.get('size', '') or
+                           row.get('SIZE', '')).strip()
+                    fuel = (row.get('Fuel', '') or 
+                           row.get('fuel', '') or
+                           row.get('FUEL', '')).strip()
+                    emission_str = (row.get('Emission intensity (g CO2e/t-km)', '') or
+                                   row.get('emission intensity (g co2e/t-km)', '') or
+                                   row.get('Emission intensity (g CO2e/t-km)', '')).strip()
+                    
+                    # Debug first row
+                    if row_num == 2:
+                        print(f"First row data: vessel_type='{vessel_type}', size='{size}', fuel='{fuel}', emission='{emission_str}'", flush=True)
+                        print(f"First row keys: {list(row.keys())}", flush=True)
+                        print(f"First row values: {list(row.values())}", flush=True)
                     
                     # Skip empty rows
                     if not vessel_type or not size or not fuel or not emission_str:
+                        if row_num <= 5:  # Debug first few rows
+                            print(f"Row {row_num} skipped - empty values", flush=True)
                         continue
                     
                     try:
                         emission_factor = float(emission_str)
                     except ValueError:
+                        if row_num <= 5:
+                            print(f"Row {row_num} skipped - invalid emission value: '{emission_str}'", flush=True)
                         continue
                     
                     key = f"{vessel_type}|{size}|{fuel}"
@@ -327,18 +348,36 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             road_factors = {}
             with open('data/road.csv', 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
-                for row in reader:
-                    mode = row.get('Mode', '').strip()
-                    fuel = row.get('Fuel', '').strip()
-                    emission_str = row.get('Emission intensity (g CO2e/t-km)', '').strip()
+                print(f"Road CSV columns: {reader.fieldnames}", flush=True)
+                for row_num, row in enumerate(reader, start=2):
+                    # Try different possible column name variations
+                    mode = (row.get('Mode', '') or 
+                           row.get('mode', '') or
+                           row.get('MODE', '')).strip()
+                    fuel = (row.get('Fuel', '') or 
+                           row.get('fuel', '') or
+                           row.get('FUEL', '')).strip()
+                    emission_str = (row.get('Emission intensity (g CO2e/t-km)', '') or
+                                   row.get('emission intensity (g co2e/t-km)', '') or
+                                   row.get('Emission intensity (g CO2e/t-km)', '')).strip()
+                    
+                    # Debug first row
+                    if row_num == 2:
+                        print(f"First road row data: mode='{mode}', fuel='{fuel}', emission='{emission_str}'", flush=True)
+                        print(f"First road row keys: {list(row.keys())}", flush=True)
+                        print(f"First road row values: {list(row.values())}", flush=True)
                     
                     # Skip empty rows
                     if not mode or not fuel or not emission_str:
+                        if row_num <= 5:
+                            print(f"Road row {row_num} skipped - empty values", flush=True)
                         continue
                     
                     try:
                         emission_factor = float(emission_str)
                     except ValueError:
+                        if row_num <= 5:
+                            print(f"Road row {row_num} skipped - invalid emission value: '{emission_str}'", flush=True)
                         continue
                     
                     key = f"{mode}|{fuel}"
