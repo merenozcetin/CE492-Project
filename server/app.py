@@ -286,34 +286,24 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         """Load sea transport emission factors from sea.csv"""
         try:
             sea_factors = {}
-            with open('data/sea.csv', 'r', encoding='utf-8') as f:
+            with open('data/sea.csv', 'r', encoding='utf-8-sig') as f:  # utf-8-sig automatically strips BOM
                 reader = csv.DictReader(f)
                 print(f"CSV columns: {reader.fieldnames}", flush=True)
                 for row_num, row in enumerate(reader, start=2):
-                    # Try different possible column name variations
+                    # Get values - utf-8-sig should have stripped BOM, but handle both cases
                     vessel_type = (row.get('Vessel Characteristics', '') or 
-                                  row.get('Vessel Characteristics', '') or
-                                  row.get('vessel characteristics', '') or
-                                  row.get('VESSEL CHARACTERISTICS', '')).strip()
-                    size = (row.get('Size', '') or 
-                           row.get('size', '') or
-                           row.get('SIZE', '')).strip()
-                    fuel = (row.get('Fuel', '') or 
-                           row.get('fuel', '') or
-                           row.get('FUEL', '')).strip()
-                    emission_str = (row.get('Emission intensity (g CO2e/t-km)', '') or
-                                   row.get('emission intensity (g co2e/t-km)', '') or
-                                   row.get('Emission intensity (g CO2e/t-km)', '')).strip()
+                                  row.get('\ufeffVessel Characteristics', '')).strip()
+                    size = row.get('Size', '').strip()
+                    fuel = row.get('Fuel', '').strip()
+                    emission_str = row.get('Emission intensity (g CO2e/t-km)', '').strip()
                     
                     # Debug first row
                     if row_num == 2:
                         print(f"First row data: vessel_type='{vessel_type}', size='{size}', fuel='{fuel}', emission='{emission_str}'", flush=True)
-                        print(f"First row keys: {list(row.keys())}", flush=True)
-                        print(f"First row values: {list(row.values())}", flush=True)
                     
                     # Skip empty rows
                     if not vessel_type or not size or not fuel or not emission_str:
-                        if row_num <= 5:  # Debug first few rows
+                        if row_num <= 5:
                             print(f"Row {row_num} skipped - empty values", flush=True)
                         continue
                     
@@ -346,26 +336,19 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         """Load road transport emission factors from road.csv"""
         try:
             road_factors = {}
-            with open('data/road.csv', 'r', encoding='utf-8') as f:
+            with open('data/road.csv', 'r', encoding='utf-8-sig') as f:  # utf-8-sig automatically strips BOM
                 reader = csv.DictReader(f)
                 print(f"Road CSV columns: {reader.fieldnames}", flush=True)
                 for row_num, row in enumerate(reader, start=2):
-                    # Try different possible column name variations
+                    # Get values - utf-8-sig should have stripped BOM, but handle both cases
                     mode = (row.get('Mode', '') or 
-                           row.get('mode', '') or
-                           row.get('MODE', '')).strip()
-                    fuel = (row.get('Fuel', '') or 
-                           row.get('fuel', '') or
-                           row.get('FUEL', '')).strip()
-                    emission_str = (row.get('Emission intensity (g CO2e/t-km)', '') or
-                                   row.get('emission intensity (g co2e/t-km)', '') or
-                                   row.get('Emission intensity (g CO2e/t-km)', '')).strip()
+                           row.get('\ufeffMode', '')).strip()
+                    fuel = row.get('Fuel', '').strip()
+                    emission_str = row.get('Emission intensity (g CO2e/t-km)', '').strip()
                     
                     # Debug first row
                     if row_num == 2:
                         print(f"First road row data: mode='{mode}', fuel='{fuel}', emission='{emission_str}'", flush=True)
-                        print(f"First road row keys: {list(row.keys())}", flush=True)
-                        print(f"First road row values: {list(row.values())}", flush=True)
                     
                     # Skip empty rows
                     if not mode or not fuel or not emission_str:
