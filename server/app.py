@@ -127,6 +127,8 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 }
             }
             
+            print(f"Transport options: {len(sea_vessel_types)} vessel types, {len(road_modes)} road modes")
+            
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
@@ -134,6 +136,9 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(result).encode())
             
         except Exception as e:
+            print(f"Error in handle_transport_options: {e}")
+            import traceback
+            traceback.print_exc()
             error_response = {'error': str(e)}
             self.send_response(500)
             self.send_header('Content-type', 'application/json')
@@ -1255,61 +1260,96 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         
         // Load transport options on page load
         fetch('/api/transport-options')
-            .then(response => response.json())
+            .then(response => {{
+                if (!response.ok) {{
+                    throw new Error(`HTTP error! status: ${{response.status}}`);
+                }}
+                return response.json();
+            }})
             .then(data => {{
+                console.log('Transport options loaded:', data);
                 transportOptions = data;
                 populateTransportOptions();
             }})
             .catch(error => {{
                 console.error('Error loading transport options:', error);
+                alert('Failed to load transport options. Please refresh the page.');
             }});
         
         function populateTransportOptions() {{
-            if (!transportOptions) return;
+            if (!transportOptions) {{
+                console.error('transportOptions is null or undefined');
+                return;
+            }}
+            
+            if (!transportOptions.sea || !transportOptions.road) {{
+                console.error('Invalid transportOptions structure:', transportOptions);
+                return;
+            }}
             
             // Populate sea transport options
             const vesselTypeSelect = document.getElementById('vessel-type');
             const vesselSizeSelect = document.getElementById('vessel-size');
             const seaFuelSelect = document.getElementById('sea-fuel');
             
-            transportOptions.sea.vessel_types.forEach(type => {{
-                const option = document.createElement('option');
-                option.value = type;
-                option.textContent = type;
-                vesselTypeSelect.appendChild(option);
-            }});
+            if (!vesselTypeSelect || !vesselSizeSelect || !seaFuelSelect) {{
+                console.error('Sea transport select elements not found');
+                return;
+            }}
             
-            transportOptions.sea.sizes.forEach(size => {{
-                const option = document.createElement('option');
-                option.value = size;
-                option.textContent = size;
-                vesselSizeSelect.appendChild(option);
-            }});
+            if (transportOptions.sea.vessel_types && transportOptions.sea.vessel_types.length > 0) {{
+                transportOptions.sea.vessel_types.forEach(type => {{
+                    const option = document.createElement('option');
+                    option.value = type;
+                    option.textContent = type;
+                    vesselTypeSelect.appendChild(option);
+                }});
+            }}
             
-            transportOptions.sea.fuels.forEach(fuel => {{
-                const option = document.createElement('option');
-                option.value = fuel;
-                option.textContent = fuel;
-                seaFuelSelect.appendChild(option);
-            }});
+            if (transportOptions.sea.sizes && transportOptions.sea.sizes.length > 0) {{
+                transportOptions.sea.sizes.forEach(size => {{
+                    const option = document.createElement('option');
+                    option.value = size;
+                    option.textContent = size;
+                    vesselSizeSelect.appendChild(option);
+                }});
+            }}
+            
+            if (transportOptions.sea.fuels && transportOptions.sea.fuels.length > 0) {{
+                transportOptions.sea.fuels.forEach(fuel => {{
+                    const option = document.createElement('option');
+                    option.value = fuel;
+                    option.textContent = fuel;
+                    seaFuelSelect.appendChild(option);
+                }});
+            }}
             
             // Populate road transport options
             const roadModeSelect = document.getElementById('road-mode');
             const roadFuelSelect = document.getElementById('road-fuel');
             
-            transportOptions.road.modes.forEach(mode => {{
-                const option = document.createElement('option');
-                option.value = mode;
-                option.textContent = mode;
-                roadModeSelect.appendChild(option);
-            }});
+            if (!roadModeSelect || !roadFuelSelect) {{
+                console.error('Road transport select elements not found');
+                return;
+            }}
             
-            transportOptions.road.fuels.forEach(fuel => {{
-                const option = document.createElement('option');
-                option.value = fuel;
-                option.textContent = fuel;
-                roadFuelSelect.appendChild(option);
-            }});
+            if (transportOptions.road.modes && transportOptions.road.modes.length > 0) {{
+                transportOptions.road.modes.forEach(mode => {{
+                    const option = document.createElement('option');
+                    option.value = mode;
+                    option.textContent = mode;
+                    roadModeSelect.appendChild(option);
+                }});
+            }}
+            
+            if (transportOptions.road.fuels && transportOptions.road.fuels.length > 0) {{
+                transportOptions.road.fuels.forEach(fuel => {{
+                    const option = document.createElement('option');
+                    option.value = fuel;
+                    option.textContent = fuel;
+                    roadFuelSelect.appendChild(option);
+                }});
+            }}
         }}
         
         function updateTransportFields() {{
