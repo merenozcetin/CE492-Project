@@ -1,0 +1,9 @@
+﻿Mode,Fuel,Emission intensity (g CO2e/t-km)
+Van < 3.5 t,Diesel,842
+Van < 3.5 t,Petrol,1007
+Van < 3.5 t,CNG,892
+Van < 3.5 t,LPG,959
+Rigid truck 3.5–7.5 t GVW,Diesel,335
+Rigid truck 3.5–7.5 t GVW,CNG,317
+Rigid truck 7.5–12 t GVW,Diesel,223
+Rigid truck 7.5–12 t GVW,CNG,211
