@@ -127,13 +127,19 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 }
             }
             
-            print(f"Transport options: {len(sea_vessel_types)} vessel types, {len(road_modes)} road modes")
+            print(f"Transport options: {len(sea_vessel_types)} vessel types, {len(road_modes)} road modes", flush=True)
+            print(f"Sea vessel types: {sorted(list(sea_vessel_types))}", flush=True)
+            print(f"Road modes: {sorted(list(road_modes))}", flush=True)
+            
+            json_response = json.dumps(result)
+            print(f"Response JSON length: {len(json_response)}", flush=True)
             
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            self.wfile.write(json.dumps(result).encode())
+            self.wfile.write(json_response.encode())
+            self.wfile.flush()
             
         except Exception as e:
             print(f"Error in handle_transport_options: {e}")
@@ -1259,10 +1265,18 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         let transportOptions = null;
         
         // Load transport options when DOM is ready
-        document.addEventListener('DOMContentLoaded', function() {{
-            console.log('DOM loaded, fetching transport options...');
+        if (document.readyState === 'loading') {{
+            document.addEventListener('DOMContentLoaded', loadTransportOptions);
+        }} else {{
+            // DOM is already loaded
+            loadTransportOptions();
+        }}
+        
+        function loadTransportOptions() {{
+            console.log('Loading transport options...');
             fetch('/api/transport-options')
                 .then(response => {{
+                    console.log('Response status:', response.status);
                     if (!response.ok) {{
                         throw new Error(`HTTP error! status: ${{response.status}}`);
                     }}
@@ -1270,14 +1284,16 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 }})
                 .then(data => {{
                     console.log('Transport options loaded:', data);
+                    console.log('Sea vessel types:', data.sea?.vessel_types);
+                    console.log('Road modes:', data.road?.modes);
                     transportOptions = data;
                     populateTransportOptions();
                 }})
                 .catch(error => {{
                     console.error('Error loading transport options:', error);
-                    alert('Failed to load transport options. Please refresh the page.');
+                    alert('Failed to load transport options: ' + error.message);
                 }});
-        }});
+        }}
         
         function populateTransportOptions() {{
             if (!transportOptions) {{
