@@ -20,6 +20,7 @@ import urllib.parse
 import math
 import urllib.request
 import urllib.error
+import csv
 from datetime import datetime
 
 try:
@@ -49,6 +50,8 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_mrv_calculation()
         elif self.path.startswith('/api/ports'):
             self.handle_port_search()
+        elif self.path.startswith('/api/transport-options'):
+            self.handle_transport_options()
         elif self.path.startswith('/api/road-distance'):
             self.handle_road_distance()
         else:
@@ -85,6 +88,56 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             error_response = {'error': str(e)}
             self.send_response(500)
             self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(error_response).encode())
+    
+    def handle_transport_options(self):
+        """Handle request for transport options (sea vessel types/sizes/fuels, road modes/fuels)"""
+        try:
+            sea_factors = self.load_sea_emission_factors()
+            road_factors = self.load_road_emission_factors()
+            
+            # Extract unique vessel types, sizes, and fuels for sea transport
+            sea_vessel_types = set()
+            sea_sizes = set()
+            sea_fuels = set()
+            
+            for key, data in sea_factors.items():
+                sea_vessel_types.add(data['vessel_type'])
+                sea_sizes.add(data['size'])
+                sea_fuels.add(data['fuel'])
+            
+            # Extract unique modes and fuels for road transport
+            road_modes = set()
+            road_fuels = set()
+            
+            for key, data in road_factors.items():
+                road_modes.add(data['mode'])
+                road_fuels.add(data['fuel'])
+            
+            result = {
+                'sea': {
+                    'vessel_types': sorted(list(sea_vessel_types)),
+                    'sizes': sorted(list(sea_sizes)),
+                    'fuels': sorted(list(sea_fuels))
+                },
+                'road': {
+                    'modes': sorted(list(road_modes)),
+                    'fuels': sorted(list(road_fuels))
+                }
+            }
+            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode())
+            
+        except Exception as e:
+            error_response = {'error': str(e)}
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(json.dumps(error_response).encode())
     
@@ -206,51 +259,192 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             print(f"Error loading ETS prices: {e}")
             return {}
     
+    def load_sea_emission_factors(self):
+        """Load sea transport emission factors from sea.csv"""
+        try:
+            sea_factors = {}
+            with open('data/sea.csv', 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    vessel_type = row.get('Vessel Characteristics', '').strip()
+                    size = row.get('Size', '').strip()
+                    fuel = row.get('Fuel', '').strip()
+                    emission_factor = float(row.get('Emission intensity (g CO2e/t-km)', 0))
+                    
+                    key = f"{vessel_type}|{size}|{fuel}"
+                    sea_factors[key] = {
+                        'vessel_type': vessel_type,
+                        'size': size,
+                        'fuel': fuel,
+                        'emission_factor': emission_factor  # g CO2e/t-km
+                    }
+            print(f"Loaded {len(sea_factors)} sea emission factor records")
+            return sea_factors
+        except Exception as e:
+            print(f"Error loading sea emission factors: {e}")
+            return {}
+    
+    def load_road_emission_factors(self):
+        """Load road transport emission factors from road.csv"""
+        try:
+            road_factors = {}
+            with open('data/road.csv', 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    mode = row.get('Mode', '').strip()
+                    fuel = row.get('Fuel', '').strip()
+                    emission_factor = float(row.get('Emission intensity (g CO2e/t-km)', 0))
+                    
+                    key = f"{mode}|{fuel}"
+                    road_factors[key] = {
+                        'mode': mode,
+                        'fuel': fuel,
+                        'emission_factor': emission_factor  # g CO2e/t-km
+                    }
+            print(f"Loaded {len(road_factors)} road emission factor records")
+            return road_factors
+        except Exception as e:
+            print(f"Error loading road emission factors: {e}")
+            return {}
+    
     def handle_mrv_calculation(self):
         """Handle MRV emissions and ETS cost calculation"""
         try:
             # Parse query parameters
             query_params = urllib.parse.parse_qs(self.path.split('?')[1])
             
-            imo_number = query_params.get('imo', [''])[0]
+            transport_mode = query_params.get('transport_mode', [''])[0]  # 'sea' or 'road'
             origin_lat = float(query_params.get('origin_lat', ['0'])[0])
             origin_lon = float(query_params.get('origin_lon', ['0'])[0])
             dest_lat = float(query_params.get('dest_lat', ['0'])[0])
             dest_lon = float(query_params.get('dest_lon', ['0'])[0])
+            cargo_weight = float(query_params.get('cargo_weight', ['0'])[0])  # in tonnes
             
-            # Load MRV data
-            mrv_data = self.load_mrv_data()
+            # Load emission factors and ETS prices
+            sea_factors = self.load_sea_emission_factors()
+            road_factors = self.load_road_emission_factors()
             ets_prices = self.load_ets_prices()
             
-            # Get ship data
-            if imo_number not in mrv_data:
-                error_response = {'error': f'Ship IMO {imo_number} not found in MRV database'}
+            emission_factor = None
+            distance_km = None
+            transport_info = {}
+            
+            if transport_mode == 'sea':
+                # Sea transport: get ship type, size, fuel
+                vessel_type = query_params.get('vessel_type', [''])[0]
+                size = query_params.get('size', [''])[0]
+                fuel = query_params.get('fuel', [''])[0]
+                
+                # Find emission factor
+                key = f"{vessel_type}|{size}|{fuel}"
+                if key not in sea_factors:
+                    error_response = {'error': f'Sea emission factor not found for: {vessel_type}, {size}, {fuel}'}
+                    self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(error_response).encode())
+                    return
+                
+                emission_factor = sea_factors[key]['emission_factor']
+                transport_info = {
+                    'mode': 'Sea Transport',
+                    'vessel_type': vessel_type,
+                    'size': size,
+                    'fuel': fuel,
+                    'emission_factor': emission_factor
+                }
+                
+                # Calculate sea distance
+                distance_result = self.calculate_distances(origin_lat, origin_lon, dest_lat, dest_lon)
+                if not distance_result['distance']['success']:
+                    error_response = {'error': f"Distance calculation failed: {distance_result['distance'].get('error', 'Unknown error')}"}
+                    self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(error_response).encode())
+                    return
+                
+                distance_km = distance_result['distance']['distance_km']
+                distance_nm = distance_result['distance']['distance_nm']
+                
+                # Calculate emissions: 1000 * cargo_weight * distance_km * emission_factor (g CO2e/t-km) / 1000000 = tonnes CO2e
+                # Formula: weight (t) * distance (km) * emission_factor (g CO2e/t-km) / 1000000 = tonnes CO2e
+                co2eq_emissions_t = (cargo_weight * distance_km * emission_factor) / 1000000
+                co2_emissions_t = co2eq_emissions_t  # Assuming CO2eq = CO2 for now
+                
+            elif transport_mode == 'road':
+                # Road transport: get mode and fuel
+                road_mode = query_params.get('road_mode', [''])[0]
+                fuel = query_params.get('fuel', [''])[0]
+                
+                # Find emission factor
+                key = f"{road_mode}|{fuel}"
+                if key not in road_factors:
+                    error_response = {'error': f'Road emission factor not found for: {road_mode}, {fuel}'}
+                    self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(error_response).encode())
+                    return
+                
+                emission_factor = road_factors[key]['emission_factor']
+                transport_info = {
+                    'mode': 'Road Transport',
+                    'vehicle_mode': road_mode,
+                    'fuel': fuel,
+                    'emission_factor': emission_factor
+                }
+                
+                # Calculate road distance using OpenRouteService
+                if not ORS_AVAILABLE:
+                    error_response = {'error': 'OpenRouteService library not available for road distance calculation'}
+                    self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(error_response).encode())
+                    return
+                
+                api_key = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjljYzg0MGUwOGMzODQ0ODQ4OWI0ZTJkMWMzODcwOGM4IiwiaCI6Im11cm11cjY0In0="
+                client = ors.Client(key=api_key)
+                start_coords = [origin_lon, origin_lat]
+                end_coords = [dest_lon, dest_lat]
+                
+                routes = client.directions(
+                    coordinates=[start_coords, end_coords],
+                    profile='driving-car',
+                    format='json'
+                )
+                
+                if 'routes' not in routes or len(routes['routes']) == 0:
+                    error_response = {'error': 'No route found for road distance calculation'}
+                    self.send_response(400)
+                    self.send_header('Content-type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(error_response).encode())
+                    return
+                
+                distance_m = routes['routes'][0]['summary']['distance']
+                distance_km = distance_m / 1000
+                distance_nm = distance_km / 1.852  # Convert to nautical miles
+                
+                # Calculate emissions: 1000 * emission_factor * cargo_weight * distance_km / 1000000 = tonnes CO2e
+                # Formula: emission_factor (g CO2e/t-km) * weight (t) * distance (km) / 1000000 = tonnes CO2e
+                co2eq_emissions_t = (emission_factor * cargo_weight * distance_km) / 1000000
+                co2_emissions_t = co2eq_emissions_t  # Assuming CO2eq = CO2 for now
+                
+            else:
+                error_response = {'error': f'Invalid transport mode: {transport_mode}. Must be "sea" or "road".'}
                 self.send_response(400)
                 self.send_header('Content-type', 'application/json')
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(json.dumps(error_response).encode())
                 return
-            
-            ship_data = mrv_data[imo_number]
-            
-            # Calculate distance
-            distance_result = self.calculate_distances(origin_lat, origin_lon, dest_lat, dest_lon)
-            
-            if not distance_result['distance']['success']:
-                error_response = {'error': f"Distance calculation failed: {distance_result['distance'].get('error', 'Unknown error')}"}
-                self.send_response(400)
-                self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(json.dumps(error_response).encode())
-                return
-            
-            distance_nm = distance_result['distance']['distance_nm']
-            
-            # Calculate emissions
-            co2_emissions_t = (ship_data['co2_per_nm'] * distance_nm) / 1000  # Convert kg to tonnes
-            co2eq_emissions_t = (ship_data['co2eq_per_nm'] * distance_nm) / 1000
             
             # Load ports to determine ETS coverage
             ports = self.load_ports()
@@ -314,9 +508,14 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             # Build response
             result = {
                 'timestamp': datetime.now().isoformat(),
-                'imo_number': imo_number,
-                'ship_data': ship_data,
-                'distance': distance_result['distance'],
+                'transport_mode': transport_mode,
+                'transport_info': transport_info,
+                'cargo_weight': cargo_weight,
+                'distance': {
+                    'distance_km': round(distance_km, 2),
+                    'distance_nm': round(distance_nm, 2) if transport_mode == 'sea' else round(distance_nm, 2),
+                    'success': True
+                },
                 'emissions': {
                     'co2_tonnes': round(co2_emissions_t, 2),
                     'co2eq_tonnes': round(co2eq_emissions_t, 2)
@@ -873,11 +1072,69 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         <!-- MRV Tab -->
         <div id="mrv-tab" class="tab-content active">
             <div class="card">
-                <h2 class="card-title">🚢 Ship Information</h2>
+                <h2 class="card-title">🚚 Transportation Mode</h2>
                 
                 <div class="form-group">
-                    <label class="form-label" for="imo-number">IMO Number</label>
-                    <input type="text" id="imo-number" class="form-input" placeholder="Enter ship IMO number (e.g., 1013664)">
+                    <label class="form-label" for="transport-mode">Select Transportation Mode</label>
+                    <select id="transport-mode" class="form-input" onchange="updateTransportFields()">
+                        <option value="">-- Select Mode --</option>
+                        <option value="sea">🌊 Sea Transport</option>
+                        <option value="road">🛣️ Road Transport</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Sea Transport Fields -->
+            <div id="sea-fields" class="card" style="display: none;">
+                <h2 class="card-title">🚢 Sea Transport Details</h2>
+                
+                <div class="form-group">
+                    <label class="form-label" for="vessel-type">Vessel Type</label>
+                    <select id="vessel-type" class="form-input" onchange="updateMRVCalculateButton()">
+                        <option value="">-- Select Vessel Type --</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="vessel-size">Size (dwt)</label>
+                    <select id="vessel-size" class="form-input" onchange="updateMRVCalculateButton()">
+                        <option value="">-- Select Size --</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="sea-fuel">Fuel Type</label>
+                    <select id="sea-fuel" class="form-input" onchange="updateMRVCalculateButton()">
+                        <option value="">-- Select Fuel --</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Road Transport Fields -->
+            <div id="road-fields" class="card" style="display: none;">
+                <h2 class="card-title">🛣️ Road Transport Details</h2>
+                
+                <div class="form-group">
+                    <label class="form-label" for="road-mode">Vehicle Mode</label>
+                    <select id="road-mode" class="form-input" onchange="updateMRVCalculateButton()">
+                        <option value="">-- Select Vehicle Mode --</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="road-fuel">Fuel Type</label>
+                    <select id="road-fuel" class="form-input" onchange="updateMRVCalculateButton()">
+                        <option value="">-- Select Fuel --</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2 class="card-title">📦 Cargo Information</h2>
+                
+                <div class="form-group">
+                    <label class="form-label" for="cargo-weight">Cargo Weight (tonnes)</label>
+                    <input type="number" id="cargo-weight" class="form-input" placeholder="Enter cargo weight in tonnes" step="0.01" min="0" oninput="updateMRVCalculateButton()">
                 </div>
             </div>
             
@@ -994,6 +1251,85 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         let selectedDestination = null;
         let selectedMRVOrigin = null;
         let selectedMRVDestination = null;
+        let transportOptions = null;
+        
+        // Load transport options on page load
+        fetch('/api/transport-options')
+            .then(response => response.json())
+            .then(data => {
+                transportOptions = data;
+                populateTransportOptions();
+            })
+            .catch(error => {
+                console.error('Error loading transport options:', error);
+            });
+        
+        function populateTransportOptions() {
+            if (!transportOptions) return;
+            
+            // Populate sea transport options
+            const vesselTypeSelect = document.getElementById('vessel-type');
+            const vesselSizeSelect = document.getElementById('vessel-size');
+            const seaFuelSelect = document.getElementById('sea-fuel');
+            
+            transportOptions.sea.vessel_types.forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type;
+                vesselTypeSelect.appendChild(option);
+            });
+            
+            transportOptions.sea.sizes.forEach(size => {
+                const option = document.createElement('option');
+                option.value = size;
+                option.textContent = size;
+                vesselSizeSelect.appendChild(option);
+            });
+            
+            transportOptions.sea.fuels.forEach(fuel => {
+                const option = document.createElement('option');
+                option.value = fuel;
+                option.textContent = fuel;
+                seaFuelSelect.appendChild(option);
+            });
+            
+            // Populate road transport options
+            const roadModeSelect = document.getElementById('road-mode');
+            const roadFuelSelect = document.getElementById('road-fuel');
+            
+            transportOptions.road.modes.forEach(mode => {
+                const option = document.createElement('option');
+                option.value = mode;
+                option.textContent = mode;
+                roadModeSelect.appendChild(option);
+            });
+            
+            transportOptions.road.fuels.forEach(fuel => {
+                const option = document.createElement('option');
+                option.value = fuel;
+                option.textContent = fuel;
+                roadFuelSelect.appendChild(option);
+            });
+        }
+        
+        function updateTransportFields() {
+            const transportMode = document.getElementById('transport-mode').value;
+            const seaFields = document.getElementById('sea-fields');
+            const roadFields = document.getElementById('road-fields');
+            
+            if (transportMode === 'sea') {
+                seaFields.style.display = 'block';
+                roadFields.style.display = 'none';
+            } else if (transportMode === 'road') {
+                seaFields.style.display = 'none';
+                roadFields.style.display = 'block';
+            } else {
+                seaFields.style.display = 'none';
+                roadFields.style.display = 'none';
+            }
+            
+            updateMRVCalculateButton();
+        }
         
         // Port search functionality
         document.getElementById('origin-search').addEventListener('input', function(e) {{
@@ -1036,10 +1372,6 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             }});
         }});
         
-        document.getElementById('imo-number').addEventListener('input', function() {{
-            updateMRVCalculateButton();
-        }});
-        
         // Road distance coordinate inputs
         document.getElementById('road-origin-lat').addEventListener('input', updateRoadCalculateButton);
         document.getElementById('road-origin-lon').addEventListener('input', updateRoadCalculateButton);
@@ -1079,9 +1411,24 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         }}
         
         function updateMRVCalculateButton() {{
-            const imo = document.getElementById('imo-number').value;
+            const transportMode = document.getElementById('transport-mode').value;
+            const cargoWeight = parseFloat(document.getElementById('cargo-weight').value) || 0;
             const btn = document.getElementById('mrv-calculate-btn');
-            btn.disabled = !selectedMRVOrigin || !selectedMRVDestination || !imo;
+            
+            let isValid = false;
+            
+            if (transportMode === 'sea') {{
+                const vesselType = document.getElementById('vessel-type').value;
+                const vesselSize = document.getElementById('vessel-size').value;
+                const seaFuel = document.getElementById('sea-fuel').value;
+                isValid = selectedMRVOrigin && selectedMRVDestination && vesselType && vesselSize && seaFuel && cargoWeight > 0;
+            }} else if (transportMode === 'road') {{
+                const roadMode = document.getElementById('road-mode').value;
+                const roadFuel = document.getElementById('road-fuel').value;
+                isValid = selectedMRVOrigin && selectedMRVDestination && roadMode && roadFuel && cargoWeight > 0;
+            }}
+            
+            btn.disabled = !isValid;
         }}
         
         function updateRoadCalculateButton() {{
@@ -1183,8 +1530,10 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         function calculateMRV() {{
             if (!selectedMRVOrigin || !selectedMRVDestination) return;
             
-            const imoNumber = document.getElementById('imo-number').value;
-            if (!imoNumber) return;
+            const transportMode = document.getElementById('transport-mode').value;
+            const cargoWeight = parseFloat(document.getElementById('cargo-weight').value);
+            
+            if (!transportMode || cargoWeight <= 0) return;
             
             const resultsDiv = document.getElementById('mrv-results');
             const contentDiv = document.getElementById('mrv-results-content');
@@ -1192,12 +1541,27 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             resultsDiv.classList.add('show');
             contentDiv.innerHTML = '<div class="loading">Calculating ETS costs</div>';
             
-            const url = `/api/mrv?imo=${{imoNumber}}&origin_lat=${{selectedMRVOrigin.lat}}&origin_lon=${{selectedMRVOrigin.lon}}&dest_lat=${{selectedMRVDestination.lat}}&dest_lon=${{selectedMRVDestination.lon}}`;
+            let url = `/api/mrv?transport_mode=${{transportMode}}&origin_lat=${{selectedMRVOrigin.lat}}&origin_lon=${{selectedMRVOrigin.lon}}&dest_lat=${{selectedMRVDestination.lat}}&dest_lon=${{selectedMRVDestination.lon}}&cargo_weight=${{cargoWeight}}`;
+            
+            if (transportMode === 'sea') {{
+                const vesselType = document.getElementById('vessel-type').value;
+                const vesselSize = document.getElementById('vessel-size').value;
+                const seaFuel = document.getElementById('sea-fuel').value;
+                url += `&vessel_type=${{encodeURIComponent(vesselType)}}&size=${{encodeURIComponent(vesselSize)}}&fuel=${{encodeURIComponent(seaFuel)}}`;
+            }} else if (transportMode === 'road') {{
+                const roadMode = document.getElementById('road-mode').value;
+                const roadFuel = document.getElementById('road-fuel').value;
+                url += `&road_mode=${{encodeURIComponent(roadMode)}}&fuel=${{encodeURIComponent(roadFuel)}}`;
+            }}
             
             fetch(url)
                 .then(response => response.json())
                 .then(data => {{
-                    displayMRVResults(data);
+                    if (data.error) {{
+                        contentDiv.innerHTML = `<div class="error">${{data.error}}</div>`;
+                    }} else {{
+                        displayMRVResults(data);
+                    }}
                 }})
                 .catch(error => {{
                     contentDiv.innerHTML = `<div class="error">Error: ${{error.message}}</div>`;
@@ -1213,18 +1577,49 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             }} else {{
                 html += `
                     <div class="result-card">
-                        <div class="result-header">🚢 Ship Information</div>
+                        <div class="result-header">🚚 Transport Information</div>
                         <div class="metric-row">
-                            <span class="metric-label">IMO Number</span>
-                            <span class="metric-value">${{data.imo_number}}</span>
+                            <span class="metric-label">Mode</span>
+                            <span class="metric-value">${{data.transport_info.mode}}</span>
+                        </div>
+                `;
+                
+                if (data.transport_mode === 'sea') {{
+                    html += `
+                        <div class="metric-row">
+                            <span class="metric-label">Vessel Type</span>
+                            <span class="metric-value">${{data.transport_info.vessel_type}}</span>
                         </div>
                         <div class="metric-row">
-                            <span class="metric-label">CO₂ per Nautical Mile</span>
-                            <span class="metric-value">${{data.ship_data.co2_per_nm.toFixed(2)}} kg/nm</span>
+                            <span class="metric-label">Size</span>
+                            <span class="metric-value">${{data.transport_info.size}}</span>
                         </div>
                         <div class="metric-row">
-                            <span class="metric-label">CO₂eq per Nautical Mile</span>
-                            <span class="metric-value">${{data.ship_data.co2eq_per_nm.toFixed(2)}} kg/nm</span>
+                            <span class="metric-label">Fuel</span>
+                            <span class="metric-value">${{data.transport_info.fuel}}</span>
+                        </div>
+                    `;
+                }} else {{
+                    html += `
+                        <div class="metric-row">
+                            <span class="metric-label">Vehicle Mode</span>
+                            <span class="metric-value">${{data.transport_info.vehicle_mode}}</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Fuel</span>
+                            <span class="metric-value">${{data.transport_info.fuel}}</span>
+                        </div>
+                    `;
+                }}
+                
+                html += `
+                        <div class="metric-row">
+                            <span class="metric-label">Emission Factor</span>
+                            <span class="metric-value">${{data.transport_info.emission_factor}} g CO₂e/t-km</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Cargo Weight</span>
+                            <span class="metric-value">${{data.cargo_weight}} tonnes</span>
                         </div>
                     </div>
                 `;
@@ -1233,8 +1628,8 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                     html += `
                         <div class="result-card primary">
                             <div class="result-header">📏 Distance</div>
-                            <div class="result-value">${{data.distance.distance_nm.toFixed(1)}} <span style="font-size: 1.5rem; color: #64748b;">nm</span></div>
-                            <div class="result-subtitle">${{data.distance.distance_km.toFixed(1)}} kilometers</div>
+                            <div class="result-value">${{data.distance.distance_km.toFixed(1)}} <span style="font-size: 1.5rem; color: #64748b;">km</span></div>
+                            ${{data.transport_mode === 'sea' ? `<div class="result-subtitle">${{data.distance.distance_nm.toFixed(1)}} nautical miles</div>` : ''}}
                         </div>
                     `;
                 }}
