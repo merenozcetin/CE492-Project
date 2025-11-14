@@ -160,6 +160,7 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 },
                 'road': {
                     'modes': sorted(list(road_modes)),
+                    'load_types': sorted(list(road_load_types)),
                     'fuels': sorted(list(road_fuels)),
                     'all_factors': road_factors_list
                 }
@@ -360,15 +361,15 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 reader = csv.DictReader(f)
                 print(f"Road CSV columns: {reader.fieldnames}", flush=True)
                 for row_num, row in enumerate(reader, start=2):
-                    # Get values - utf-8-sig should have stripped BOM, but handle both cases
-                    mode = (row.get('Mode', '') or 
-                           row.get('\ufeffMode', '')).strip()
+                    # Get values including load type
+                    mode = (row.get('Mode', '') or row.get('\ufeffMode', '')).strip()
+                    load_type = row.get('Load type', '').strip()
                     fuel = row.get('Fuel', '').strip()
                     emission_str = row.get('Emission intensity (g CO2e/t-km)', '').strip()
                     
                     # Debug first row
                     if row_num == 2:
-                        print(f"First road row data: mode='{mode}', fuel='{fuel}', emission='{emission_str}'", flush=True)
+                        print(f"First road row: mode='{mode}', load_type='{load_type}', fuel='{fuel}', emission='{emission_str}'", flush=True)
                     
                     # Skip empty rows
                     if not mode or not fuel or not emission_str:
@@ -380,15 +381,26 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                         emission_factor = float(emission_str)
                     except ValueError:
                         if row_num <= 5:
-                            print(f"Road row {row_num} skipped - invalid emission value: '{emission_str}'", flush=True)
+                            print(f"Road row {row_num} skipped - invalid emission: '{emission_str}'", flush=True)
                         continue
                     
-                    key = f"{mode}|{fuel}"
-                    road_factors[key] = {
-                        'mode': mode,
-                        'fuel': fuel,
-                        'emission_factor': emission_factor  # g CO2e/t-km
-                    }
+                    # Include load type in the key if available
+                    if load_type:
+                        key = f"{mode}|{load_type}|{fuel}"
+                        road_factors[key] = {
+                            'mode': mode,
+                            'load_type': load_type,
+                            'fuel': fuel,
+                            'emission_factor': emission_factor
+                        }
+                    else:
+                        key = f"{mode}|{fuel}"
+                        road_factors[key] = {
+                            'mode': mode,
+                            'load_type': '',
+                            'fuel': fuel,
+                            'emission_factor': emission_factor
+                        }
             print(f"Loaded {len(road_factors)} road emission factor records", flush=True)
             if len(road_factors) > 0:
                 first_key = list(road_factors.keys())[0]
@@ -468,28 +480,41 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 co2_emissions_t = co2eq_emissions_t  # Assuming CO2eq = CO2 for now
                 
             elif transport_mode == 'road':
-                # Road transport: get mode and fuel
+                # Road transport: get mode, load type, and fuel
                 road_mode = query_params.get('road_mode', [''])[0]
+                load_type = query_params.get('load_type', [''])[0]
                 fuel = query_params.get('fuel', [''])[0]
                 
-                # Find emission factor
-                key = f"{road_mode}|{fuel}"
-                if key not in road_factors:
-                    error_response = {'error': f'Road emission factor not found for: {road_mode}, {fuel}'}
+                # Find emission factor (try with and without load type)
+                key_with_load = f"{road_mode}|{load_type}|{fuel}"
+                key_without_load = f"{road_mode}|{fuel}"
+                
+                if key_with_load in road_factors:
+                    emission_factor = road_factors[key_with_load]['emission_factor']
+                    transport_info = {
+                        'mode': 'Road Transport',
+                        'vehicle_mode': road_mode,
+                        'load_type': load_type,
+                        'fuel': fuel,
+                        'emission_factor': emission_factor
+                    }
+                elif key_without_load in road_factors:
+                    emission_factor = road_factors[key_without_load]['emission_factor']
+                    transport_info = {
+                        'mode': 'Road Transport',
+                        'vehicle_mode': road_mode,
+                        'load_type': load_type or 'N/A',
+                        'fuel': fuel,
+                        'emission_factor': emission_factor
+                    }
+                else:
+                    error_response = {'error': f'Road emission factor not found for: {road_mode}, {load_type}, {fuel}'}
                     self.send_response(400)
                     self.send_header('Content-type', 'application/json')
                     self.send_header('Access-Control-Allow-Origin', '*')
                     self.end_headers()
                     self.wfile.write(json.dumps(error_response).encode())
                     return
-                
-                emission_factor = road_factors[key]['emission_factor']
-                transport_info = {
-                    'mode': 'Road Transport',
-                    'vehicle_mode': road_mode,
-                    'fuel': fuel,
-                    'emission_factor': emission_factor
-                }
                 
                 # Calculate road distance using OpenRouteService
                 if not ORS_AVAILABLE:
@@ -1211,6 +1236,13 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                     <label class="form-label" for="road-mode">Vehicle Mode</label>
                     <select id="road-mode" class="form-input" onchange="updateRoadDropdowns(); updateMRVCalculateButton();">
                         <option value="">-- Select Vehicle Mode --</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="road-load-type">Load Type</label>
+                    <select id="road-load-type" class="form-input" onchange="updateRoadDropdowns(); updateMRVCalculateButton();">
+                        <option value="">-- Select Load Type --</option>
                     </select>
                 </div>
                 

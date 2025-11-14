@@ -1,22 +1,22 @@
 ﻿Vessel Characteristics,Size,Unit,Fuel,Emission intensity (g CO2e/t-km)
-Bulk Carrier,0-9999,dwt,HFO,35.9
-Bulk Carrier,0-9999,dwt,VLSFO,36.9
-Bulk Carrier,0-9999,dwt,MDO,35
-Bulk Carrier,10000-34999,dwt,HFO,9.8
-Bulk Carrier,10000-34999,dwt,VLSFO,10.1
-Bulk Carrier,10000-34999,dwt,MDO,9.6
-Bulk Carrier,35000-59999,dwt,HFO,7.2
-Bulk Carrier,35000-59999,dwt,VLSFO,7.4
-Bulk Carrier,35000-59999,dwt,MDO,7
-Bulk Carrier,60000 - 99999,dwt,HFO,5.9
-Bulk Carrier,60000 - 99999,dwt,VLSFO,6.1
-Bulk Carrier,60000 - 99999,dwt,MDO,5.8
-Bulk Carrier,100000-199999,dwt,HFO,4
-Bulk Carrier,100000-199999,dwt,VLSFO,4.1
-Bulk Carrier,100000-199999,dwt,MDO,3.9
-Bulk Carrier,200000-+,dwt,HFO,3.6
-Bulk Carrier,200000-+,dwt,VLSFO,3.7
-Bulk Carrier,200000-+,dwt,MDO,3.5
+Bulk carrier,0-9999,dwt,HFO,35.9
+Bulk carrier,0-9999,dwt,VLSFO,36.9
+Bulk carrier,0-9999,dwt,MDO,35
+Bulk carrier,10000-34999,dwt,HFO,9.8
+Bulk carrier,10000-34999,dwt,VLSFO,10.1
+Bulk carrier,10000-34999,dwt,MDO,9.6
+Bulk carrier,35000-59999,dwt,HFO,7.2
+Bulk carrier,35000-59999,dwt,VLSFO,7.4
+Bulk carrier,35000-59999,dwt,MDO,7
+Bulk carrier,60000-99999,dwt,HFO,5.9
+Bulk carrier,60000-99999,dwt,VLSFO,6.1
+Bulk carrier,60000-99999,dwt,MDO,5.8
+Bulk carrier,100000-199999,dwt,HFO,4
+Bulk carrier,100000-199999,dwt,VLSFO,4.1
+Bulk carrier,100000-199999,dwt,MDO,3.9
+Bulk carrier,200000-+,dwt,HFO,3.6
+Bulk carrier,200000-+,dwt,VLSFO,3.7
+Bulk carrier,200000-+,dwt,MDO,3.5
 Chemical tanker,0-4999,dwt,HFO,69.3
 Chemical tanker,0-4999,dwt,VLSFO,71.4
 Chemical tanker,0-4999,dwt,MDO,67.7
