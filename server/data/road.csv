@@ -1,9 +1,51 @@
-﻿Mode,Fuel,Emission intensity (g CO2e/t-km)
-Van < 3.5 t,Diesel,842
-Van < 3.5 t,Petrol,1007
-Van < 3.5 t,CNG,892
-Van < 3.5 t,LPG,959
-Rigid truck 3.5–7.5 t GVW,Diesel,335
-Rigid truck 3.5–7.5 t GVW,CNG,317
-Rigid truck 7.5–12 t GVW,Diesel,223
-Rigid truck 7.5–12 t GVW,CNG,211
+﻿Mode,Load type,Fuel,Emission intensity (g CO2e/t-km)
+Van < 3.5 t,Average,Diesel,842
+Van < 3.5 t,Average,Petrol,1007
+Van < 3.5 t,Average,CNG,892
+Van < 3.5 t,Average,LPG,959
+Rigid truck 3.5–7.5t,Average,Diesel,335
+Rigid truck 3.5–7.5t,Average,CNG,317
+Rigid truck 7.5–12t,Average,Diesel,223
+Rigid truck 7.5–12t,Average,CNG,211
+Rigid truck 12–20t,Average,Diesel,191
+Rigid truck 12–20t,Average,CNG,181
+Rigid truck 20–26t,Average,Diesel,139
+Rigid truck 20–26t,Average,CNG,136
+Rigid truck 20–26t,Average,LNG,152
+Rigid truck 26–32t,Average,Diesel,125
+Rigid truck 26–32t,Container,Diesel,123
+Artic up to 34t,Average,Diesel,124
+Artic up to 34t,Container,Diesel,123
+Artic 34–40t,Average,Diesel,101
+Artic 34–40t,Container,Diesel,101
+Artic 34–40t SI,Average,LNG,102
+Artic 34–40t SI,Average,CNG,98
+Artic 34–40t SI,Average,Bio-LNG,38
+Artic 34–40t SI,Container,LNG,102
+Artic 34–40t SI,Container,CNG,98
+Artic 34–40t SI,Container,Bio-LNG,38
+Artic 34–40t HPDI,Average,LNG/diesel,91
+Artic 34–40t HPDI,Average,CNG/diesel,87
+Artic 34–40t HPDI,Average,Bio-LNG/diesel,39
+Artic 34–40t HPDI,Container,LNG/diesel,91
+Artic 34–40t HPDI,Container,CNG/diesel,87
+Artic 34–40t HPDI,Container,Bio-LNG/diesel,39
+Artic 40t,Heavy,Diesel,80
+Artic 40–44t,Light,Diesel,143
+Artic 40–44t,Average,Diesel,89
+Artic 40–44t,Heavy,Diesel,77
+Artic 40–44t,Container,Diesel,90
+Artic up to 60t,Average,Diesel,73
+Artic up to 60t,Heavy,Diesel,60
+Artic up to 60t,Container,Diesel,73
+Artic up to 72t,Heavy,Diesel,47
+Artic up to 72t,Container,Diesel,54
+Van < 3.5 t,Average,Electric,1.2
+Rigid 3.5–7.5t,Light,Electric,0.86
+Rigid 3.5–7.5t,Average,Electric,0.44
+Rigid 7.5–12t,Light,Electric,0.65
+Rigid 7.5–12t,Average,Electric,0.34
+Rigid 12–20t,Light,Electric,0.4
+Rigid 12–20t,Average,Electric,0.22
+Rigid 26–40t,Light,Electric,0.28
+Rigid 26–40t,Average,Electric,0.16

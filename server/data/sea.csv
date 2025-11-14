@@ -1,22 +1,22 @@
 ﻿Vessel Characteristics,Size,Unit,Fuel,Emission intensity (g CO2e/t-km)
-Bulk carrier,0-9999,dwt,HFO,35.9
-Bulk carrier,0-9999,dwt,VLSFO,36.9
-Bulk carrier,0-9999,dwt,MDO,35
-Bulk carrier,10000-34999,dwt,HFO,9.8
-Bulk carrier,10000-34999,dwt,VLSFO,10.1
-Bulk carrier,10000-34999,dwt,MDO,9.6
-Bulk carrier,35000-59999,dwt,HFO,7.2
-Bulk carrier,35000-59999,dwt,VLSFO,7.4
-Bulk carrier,35000-59999,dwt,MDO,7
-Bulk carrier,60000-99999,dwt,HFO,5.9
-Bulk carrier,60000-99999,dwt,VLSFO,6.1
-Bulk carrier,60000-99999,dwt,MDO,5.8
-Bulk carrier,100000-199999,dwt,HFO,4
-Bulk carrier,100000-199999,dwt,VLSFO,4.1
-Bulk carrier,100000-199999,dwt,MDO,3.9
-Bulk carrier,200000-+,dwt,HFO,3.6
-Bulk carrier,200000-+,dwt,VLSFO,3.7
-Bulk carrier,200000-+,dwt,MDO,3.5
+Bulk Carrier,0-9999,dwt,HFO,35.9
+Bulk Carrier,0-9999,dwt,VLSFO,36.9
+Bulk Carrier,0-9999,dwt,MDO,35
+Bulk Carrier,10000-34999,dwt,HFO,9.8
+Bulk Carrier,10000-34999,dwt,VLSFO,10.1
+Bulk Carrier,10000-34999,dwt,MDO,9.6
+Bulk Carrier,35000-59999,dwt,HFO,7.2
+Bulk Carrier,35000-59999,dwt,VLSFO,7.4
+Bulk Carrier,35000-59999,dwt,MDO,7
+Bulk Carrier,60000 - 99999,dwt,HFO,5.9
+Bulk Carrier,60000 - 99999,dwt,VLSFO,6.1
+Bulk Carrier,60000 - 99999,dwt,MDO,5.8
+Bulk Carrier,100000-199999,dwt,HFO,4
+Bulk Carrier,100000-199999,dwt,VLSFO,4.1
+Bulk Carrier,100000-199999,dwt,MDO,3.9
+Bulk Carrier,200000-+,dwt,HFO,3.6
+Bulk Carrier,200000-+,dwt,VLSFO,3.7
+Bulk Carrier,200000-+,dwt,MDO,3.5
 Chemical tanker,0-4999,dwt,HFO,69.3
 Chemical tanker,0-4999,dwt,VLSFO,71.4
 Chemical tanker,0-4999,dwt,MDO,67.7
@@ -32,3 +32,105 @@ Chemical tanker,20000-39999,dwt,MDO,12.5
 Chemical tanker,40000-+,dwt,HFO,9.8
 Chemical tanker,40000-+,dwt,VLSFO,10.1
 Chemical tanker,40000-+,dwt,MDO,9.6
+General cargo,0-4999,dwt,HFO,30.4
+General cargo,0-4999,dwt,VLSFO,31.3
+General cargo,0-4999,dwt,MDO,29.7
+General cargo,5000-9999,dwt,HFO,24.5
+General cargo,5000-9999,dwt,VLSFO,25.2
+General cargo,5000-9999,dwt,MDO,23.9
+General cargo,10000-19999,dwt,HFO,21.8
+General cargo,10000-19999,dwt,VLSFO,22.4
+General cargo,10000-19999,dwt,MDO,21.3
+General cargo,20000-+,dwt,HFO,11.3
+General cargo,20000-+,dwt,VLSFO,11.6
+General cargo,20000-+,dwt,MDO,11
+Liquefied gas tanker,0-49999,cbm,HFO,54.5
+Liquefied gas tanker,0-49999,cbm,VLSFO,56.1
+Liquefied gas tanker,0-49999,cbm,MDO,53.2
+Liquefied gas tanker,50000-99999,cbm,HFO,15.8
+Liquefied gas tanker,50000-99999,cbm,VLSFO,16.3
+Liquefied gas tanker,50000-99999,cbm,MDO,15.4
+Liquefied gas tanker,100000-199999,cbm,HFO,12.5
+Liquefied gas tanker,100000-199999,cbm,VLSFO,12.8
+Liquefied gas tanker,100000-199999,cbm,MDO,12.2
+Liquefied gas tanker,200000-+,cbm,HFO,13.2
+Liquefied gas tanker,200000-+,cbm,VLSFO,13.6
+Liquefied gas tanker,200000-+,cbm,MDO,12.9
+Oil tanker,0-4999,dwt,HFO,99
+Oil tanker,0-4999,dwt,VLSFO,101.9
+Oil tanker,0-4999,dwt,MDO,96.7
+Oil tanker,5000-9999,dwt,HFO,54.3
+Oil tanker,5000-9999,dwt,VLSFO,55.9
+Oil tanker,5000-9999,dwt,MDO,53.1
+Oil tanker,10000-19999,dwt,HFO,42.5
+Oil tanker,10000-19999,dwt,VLSFO,43.8
+Oil tanker,10000-19999,dwt,MDO,41.5
+Oil tanker,20000-59999,dwt,HFO,20.8
+Oil tanker,20000-59999,dwt,VLSFO,21.4
+Oil tanker,20000-59999,dwt,MDO,20.3
+Oil tanker,60000-79999,dwt,HFO,11.9
+Oil tanker,60000-79999,dwt,VLSFO,12.2
+Oil tanker,60000-79999,dwt,MDO,11.6
+Oil tanker,80000-119999,dwt,HFO,9.3
+Oil tanker,80000-119999,dwt,VLSFO,9.6
+Oil tanker,80000-119999,dwt,MDO,9.1
+Oil tanker,120000-199999,dwt,HFO,6.9
+Oil tanker,120000-199999,dwt,VLSFO,7.1
+Oil tanker,120000-199999,dwt,MDO,6.7
+Oil tanker,200000-+,dwt,HFO,4.2
+Oil tanker,200000-+,dwt,VLSFO,4.3
+Oil tanker,200000-+,dwt,MDO,4.1
+Other liquids tankers,0-999,dwt,HFO,1407.2
+Other liquids tankers,0-999,dwt,VLSFO,1448.7
+Other liquids tankers,0-999,dwt,MDO,1374.6
+Other liquids tankers,1000-+,dwt,HFO,37.7
+Other liquids tankers,1000-+,dwt,VLSFO,38.8
+Other liquids tankers,1000-+,dwt,MDO,36.9
+Ferry-RoPax,0-1999,GT,HFO,613.9
+Ferry-RoPax,0-1999,GT,VLSFO,632
+Ferry-RoPax,0-1999,GT,MDO,599.7
+Ferry-RoPax,2000-4999,GT,HFO,296.6
+Ferry-RoPax,2000-4999,GT,VLSFO,305.3
+Ferry-RoPax,2000-4999,GT,MDO,289.7
+Ferry-RoPax,5000-9999,GT,HFO,229.7
+Ferry-RoPax,5000-9999,GT,VLSFO,236.5
+Ferry-RoPax,5000-9999,GT,MDO,224.4
+Ferry-RoPax,10000-19999,GT,HFO,146.8
+Ferry-RoPax,10000-19999,GT,VLSFO,151.2
+Ferry-RoPax,10000-19999,GT,MDO,143.4
+Ferry-RoPax,20000-+,GT,HFO,110.9
+Ferry-RoPax,20000-+,GT,VLSFO,114.2
+Ferry-RoPax,20000-+,GT,MDO,108.3
+Refrigerated bulk,0-1999,dwt,HFO,182.2
+Refrigerated bulk,0-1999,dwt,VLSFO,187.6
+Refrigerated bulk,0-1999,dwt,MDO,178
+Refrigerated bulk,2000-5999,dwt,HFO,88.3
+Refrigerated bulk,2000-5999,dwt,VLSFO,90.9
+Refrigerated bulk,2000-5999,dwt,MDO,86.2
+Refrigerated bulk,6000-9999,dwt,HFO,66.1
+Refrigerated bulk,6000-9999,dwt,VLSFO,68
+Refrigerated bulk,6000-9999,dwt,MDO,64.6
+Refrigerated bulk,10000-+,dwt,HFO,48.7
+Refrigerated bulk,10000-+,dwt,VLSFO,50.1
+Refrigerated bulk,10000-+,dwt,MDO,47.5
+Ro-Ro,0-4999,dwt,HFO,233.4
+Ro-Ro,0-4999,dwt,VLSFO,240.2
+Ro-Ro,0-4999,dwt,MDO,228
+Ro-Ro,5000-9999,dwt,HFO,51
+Ro-Ro,5000-9999,dwt,VLSFO,52.6
+Ro-Ro,5000-9999,dwt,MDO,49.9
+Ro-Ro,10000-14999,dwt,HFO,42.5
+Ro-Ro,10000-14999,dwt,VLSFO,43.7
+Ro-Ro,10000-14999,dwt,MDO,41.5
+Ro-Ro,15000+,dwt,HFO,22.4
+Ro-Ro,15000+,dwt,VLSFO,23
+Ro-Ro,15000+,dwt,MDO,21.8
+Vehicle,0-29999,GT,HFO,113.5
+Vehicle,0-29999,GT,VLSFO,116.8
+Vehicle,0-29999,GT,MDO,110.8
+Vehicle,30000-49999,GT,HFO,54.1
+Vehicle,30000-49999,GT,VLSFO,55.7
+Vehicle,30000-49999,GT,MDO,52.9
+Vehicle,50000+,GT,HFO,44
+Vehicle,50000+,GT,VLSFO,45.3
+Vehicle,50000+,GT,MDO,43
