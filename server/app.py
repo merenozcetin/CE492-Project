@@ -1366,11 +1366,6 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 </button>
             </div>
             
-            <div class="status-badge {'success' if JAVA_AVAILABLE else ''}">
-                <span>{'✓' if JAVA_AVAILABLE else '⚠'}</span>
-                Java SeaRoute: {'Available' if JAVA_AVAILABLE else 'Not Available'}
-            </div>
-            
             <div id="mrv-results" class="results">
                 <div id="mrv-results-content"></div>
             </div>
@@ -1400,11 +1395,6 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 <button class="btn-primary" id="calculate-btn" onclick="calculateDistance()" disabled>
                     🌊 Calculate Distance
                 </button>
-            </div>
-            
-            <div class="status-badge {'success' if JAVA_AVAILABLE else ''}">
-                <span>{'✓' if JAVA_AVAILABLE else '⚠'}</span>
-                Java SeaRoute: {'Available' if JAVA_AVAILABLE else 'Not Available'}
             </div>
             
             <div id="results" class="results">
