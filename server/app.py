@@ -127,10 +127,12 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             
             # For road transport with conditional filtering
             road_modes = set()
+            road_load_types = set()
             road_fuels = set()
             
             for key, data in road_factors.items():
                 mode = data.get('mode', '').strip()
+                load_type = data.get('load_type', '').strip()
                 fuel = data.get('fuel', '').strip()
                 
                 # Apply filter
@@ -139,6 +141,8 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 
                 if mode:
                     road_modes.add(mode)
+                if load_type:
+                    road_load_types.add(load_type)
                 if fuel:
                     road_fuels.add(fuel)
             
