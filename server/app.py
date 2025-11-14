@@ -753,6 +753,26 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(error_response).encode())
     
+    def is_coordinate_in_eea(self, lat, lon):
+        """
+        Determine if coordinates are in EEA territory using a simple bounding box
+        EEA Region Approximate Borders:
+        - North: 71° N (Northern tip of Norway)
+        - South: 35° N (Southern Cyprus/Crete)
+        - West: 25° W (Western Iceland)
+        - East: 32° E (Eastern Cyprus/Finland)
+        """
+        # Simple rectangular bounding box for EEA region
+        EEA_NORTH = 71.0
+        EEA_SOUTH = 35.0
+        EEA_WEST = -25.0
+        EEA_EAST = 32.0
+        
+        # Check if coordinates fall within EEA bounding box
+        is_in_eea = (EEA_SOUTH <= lat <= EEA_NORTH) and (EEA_WEST <= lon <= EEA_EAST)
+        
+        return is_in_eea
+    
     def search_ports(self, ports, search_term):
         """Search ports by name or country"""
         if not search_term or len(search_term) < 2:
