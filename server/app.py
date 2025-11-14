@@ -531,33 +531,58 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                     return
                 
                 api_key = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjljYzg0MGUwOGMzODQ0ODQ4OWI0ZTJkMWMzODcwOGM4IiwiaCI6Im11cm11cjY0In0="
-                client = ors.Client(key=api_key)
-                start_coords = [origin_lon, origin_lat]
-                end_coords = [dest_lon, dest_lat]
                 
-                routes = client.directions(
-                    coordinates=[start_coords, end_coords],
-                    profile='driving-car',
-                    format='json'
-                )
-                
-                if 'routes' not in routes or len(routes['routes']) == 0:
-                    error_response = {'error': 'No route found for road distance calculation'}
+                try:
+                    client = ors.Client(key=api_key)
+                    start_coords = [origin_lon, origin_lat]
+                    end_coords = [dest_lon, dest_lat]
+                    
+                    routes = client.directions(
+                        coordinates=[start_coords, end_coords],
+                        profile='driving-car',
+                        format='json'
+                    )
+                    
+                    if 'routes' not in routes or len(routes['routes']) == 0:
+                        error_response = {'error': '⚠️ No route found for these coordinates. Please check they are near roads.'}
+                        self.send_response(400)
+                        self.send_header('Content-type', 'application/json')
+                        self.send_header('Access-Control-Allow-Origin', '*')
+                        self.end_headers()
+                        self.wfile.write(json.dumps(error_response).encode())
+                        return
+                    
+                    distance_m = routes['routes'][0]['summary']['distance']
+                    distance_km = distance_m / 1000
+                    distance_nm = distance_km / 1.852  # Convert to nautical miles
+                    
+                    # Calculate emissions
+                    co2eq_emissions_t = (emission_factor * cargo_weight * distance_km) / 1000000
+                    co2_emissions_t = co2eq_emissions_t
+                    
+                except ors.exceptions.ApiError as api_error:
+                    # Handle OpenRouteService API errors with user-friendly messages
+                    error_str = str(api_error)
+                    print(f"OpenRouteService API error in MRV: {error_str}", flush=True)
+                    
+                    if "Could not find routable point" in error_str or "2010" in error_str:
+                        user_message = "⚠️ The coordinates are not near a road. Please ensure your coordinates are within 350 meters of a drivable road. Try using major city coordinates or addresses near highways."
+                    elif "2009" in error_str or "point is out of bounds" in error_str:
+                        user_message = "⚠️ The coordinates are outside the available map area. Please check your latitude and longitude values."
+                    elif "401" in error_str or "Unauthorized" in error_str:
+                        user_message = "⚠️ API authentication error. Please contact support."
+                    elif "403" in error_str or "rate limit" in error_str.lower():
+                        user_message = "⚠️ API rate limit exceeded. Please try again in a few moments."
+                    else:
+                        user_message = f"⚠️ Road routing error. Please verify your coordinates and try again."
+                    
+                    error_response = {'error': user_message}
                     self.send_response(400)
                     self.send_header('Content-type', 'application/json')
                     self.send_header('Access-Control-Allow-Origin', '*')
                     self.end_headers()
                     self.wfile.write(json.dumps(error_response).encode())
                     return
-                
-                distance_m = routes['routes'][0]['summary']['distance']
-                distance_km = distance_m / 1000
-                distance_nm = distance_km / 1.852  # Convert to nautical miles
-                
-                # Calculate emissions: 1000 * emission_factor * cargo_weight * distance_km / 1000000 = tonnes CO2e
-                # Formula: emission_factor (g CO2e/t-km) * weight (t) * distance (km) / 1000000 = tonnes CO2e
-                co2eq_emissions_t = (emission_factor * cargo_weight * distance_km) / 1000000
-                co2_emissions_t = co2eq_emissions_t  # Assuming CO2eq = CO2 for now
                 
             else:
                 error_response = {'error': f'Invalid transport mode: {transport_mode}. Must be "sea" or "road".'}
