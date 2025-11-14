@@ -755,32 +755,41 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
     
     def is_coordinate_in_eea(self, lat, lon):
         """
-        Determine if coordinates are in EEA territory using a conservative bounding box
-        EEA Region Approximate Borders (excluding Turkey, Russia, Ukraine, Belarus, etc.):
-        - North: 71° N (Northern tip of Norway)
-        - South: 35° N (Southern Cyprus/Crete) 
-        - West: 25° W (Western Iceland)
-        - East: 28° E (Eastern Finland/Estonia - BEFORE Turkey/Russia border)
+        Determine if coordinates are in EEA territory
+        Uses a simplified multi-region approach to approximate EEA boundaries
         
-        Note: This is a simplified rectangular approximation.
-        Cyprus (EEA member) is at ~33-35°E, so we use a more restrictive eastern boundary
-        to exclude Turkey, Russia, Ukraine, Belarus while keeping most of EEA.
+        EEA includes: EU-27 + Iceland, Liechtenstein, Norway
         """
-        # Conservative rectangular bounding box for EEA region
-        EEA_NORTH = 71.0   # Norway
-        EEA_SOUTH = 35.0   # Cyprus/Crete
-        EEA_WEST = -25.0   # Iceland
-        EEA_EAST = 28.0    # Finland/Estonia (before Turkey at ~26-45°E)
+        # Main Europe box (excludes Turkey, Russia, Ukraine, Belarus, etc.)
+        # Covers: Most of EU, Norway, Sweden, Finland (west of 28°E)
+        if 35.0 <= lat <= 71.0 and -25.0 <= lon <= 28.0:
+            # Exclude Turkey (roughly south of 42°N and east of 26°E)
+            if lat < 42.0 and lon > 26.0:
+                return False  # This is Turkey region
+            return True
         
-        # Check if coordinates fall within EEA bounding box
-        is_in_eea = (EEA_SOUTH <= lat <= EEA_NORTH) and (EEA_WEST <= lon <= EEA_EAST)
+        # Special regions for EEA members outside main box:
         
-        # Special case: Cyprus is EEA but outside the main box (33-34°E)
-        # Add Cyprus exception
+        # Cyprus (EEA member, east of main box)
         if 34.5 <= lat <= 35.7 and 32.3 <= lon <= 34.6:
-            is_in_eea = True
+            return True
         
-        return is_in_eea
+        # Canary Islands (Spain, part of EEA)
+        if 27.6 <= lat <= 29.4 and -18.2 <= lon <= -13.4:
+            return True
+        
+        # Azores (Portugal, part of EEA)
+        if 36.9 <= lat <= 39.7 and -31.3 <= lon <= -25.0:
+            return True
+        
+        # Madeira (Portugal, part of EEA)
+        if 32.4 <= lat <= 33.1 and -17.3 <= lon <= -16.3:
+            return True
+        
+        # French overseas territories in Europe (if any)
+        # Guadeloupe, Martinique, etc. are NOT in EEA for road transport purposes
+        
+        return False
     
     def search_ports(self, ports, search_term):
         """Search ports by name or country"""
