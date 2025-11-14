@@ -1177,13 +1177,13 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
     </style>
 </head>
 <body>
-    <div class="header">
+        <div class="header">
         <div class="header-content">
             <h1>⚓ Maritime Distance & ETS Calculator</h1>
             <p>Calculate shipping distances and EU Emissions Trading System costs</p>
         </div>
-    </div>
-    
+        </div>
+        
     <div class="container">
         <div class="tabs">
             <button class="tab-btn active" onclick="switchTab('mrv')">💰 ETS Cost Calculation</button>
@@ -1196,7 +1196,7 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             <div class="card">
                 <h2 class="card-title">🚚 Transportation Mode</h2>
                 
-                <div class="form-group">
+                    <div class="form-group">
                     <label class="form-label" for="transport-mode">Select Transportation Mode</label>
                     <select id="transport-mode" class="form-input" onchange="updateTransportFields()">
                         <option value="">-- Select Mode --</option>
@@ -1204,18 +1204,18 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                         <option value="road">🛣️ Road Transport</option>
                     </select>
                 </div>
-            </div>
+                    </div>
             
             <!-- Sea Transport Fields -->
             <div id="sea-fields" class="card" style="display: none;">
                 <h2 class="card-title">🚢 Sea Transport Details</h2>
-                
-                <div class="form-group">
+                    
+                    <div class="form-group">
                     <label class="form-label" for="vessel-type">Vessel Type</label>
                     <select id="vessel-type" class="form-input" onchange="updateSeaDropdowns(); updateMRVCalculateButton();">
                         <option value="">-- Select Vessel Type --</option>
                     </select>
-                </div>
+                    </div>
                 
                 <div class="form-group">
                     <label class="form-label" for="vessel-size">Size (dwt)</label>
@@ -1224,24 +1224,24 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                     </select>
                 </div>
                 
-                <div class="form-group">
+                    <div class="form-group">
                     <label class="form-label" for="sea-fuel">Fuel Type</label>
                     <select id="sea-fuel" class="form-input" onchange="updateMRVCalculateButton()">
                         <option value="">-- Select Fuel --</option>
                     </select>
                 </div>
-            </div>
+                    </div>
             
             <!-- Road Transport Fields -->
             <div id="road-fields" class="card" style="display: none;">
                 <h2 class="card-title">🛣️ Road Transport Details</h2>
-                
-                <div class="form-group">
+                    
+                    <div class="form-group">
                     <label class="form-label" for="road-mode">Vehicle Mode</label>
                     <select id="road-mode" class="form-input" onchange="updateRoadDropdowns(); updateMRVCalculateButton();">
                         <option value="">-- Select Vehicle Mode --</option>
                     </select>
-                </div>
+                    </div>
                 
                 <div class="form-group">
                     <label class="form-label" for="road-load-type">Load Type</label>
@@ -1258,7 +1258,7 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 </div>
             </div>
             
-            <div class="card">
+            <div id="cargo-fields" class="card" style="display: none;">
                 <h2 class="card-title">📦 Cargo Information</h2>
                 
                 <div class="form-group">
@@ -1267,8 +1267,9 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 </div>
             </div>
             
-            <div class="card">
-                <h2 class="card-title">📍 Route Information</h2>
+            <!-- Sea Transport Route (Ports) -->
+            <div id="sea-route-fields" class="card" style="display: none;">
+                <h2 class="card-title">📍 Route Information (Sea)</h2>
                 
                 <div class="form-grid">
                     <div class="form-group">
@@ -1287,6 +1288,37 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 </div>
                 
                 <button class="btn-primary" id="mrv-calculate-btn" onclick="calculateMRV()" disabled>
+                    💰 Calculate ETS Costs
+                </button>
+            </div>
+            
+            <!-- Road Transport Route (Coordinates) -->
+            <div id="road-route-fields" class="card" style="display: none;">
+                <h2 class="card-title">📍 Route Information (Road)</h2>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label" for="road-origin-lat-mrv">Origin Latitude</label>
+                        <input type="number" id="road-origin-lat-mrv" class="form-input" placeholder="e.g., 41.0082" step="any" oninput="updateMRVCalculateButton()">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="road-origin-lon-mrv">Origin Longitude</label>
+                        <input type="number" id="road-origin-lon-mrv" class="form-input" placeholder="e.g., 28.9784" step="any" oninput="updateMRVCalculateButton()">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="road-dest-lat-mrv">Destination Latitude</label>
+                        <input type="number" id="road-dest-lat-mrv" class="form-input" placeholder="e.g., 48.8566" step="any" oninput="updateMRVCalculateButton()">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="road-dest-lon-mrv">Destination Longitude</label>
+                        <input type="number" id="road-dest-lon-mrv" class="form-input" placeholder="e.g., 2.3522" step="any" oninput="updateMRVCalculateButton()">
+                    </div>
+                </div>
+                
+                <button class="btn-primary" id="mrv-calculate-btn-road" onclick="calculateMRV()" disabled>
                     💰 Calculate ETS Costs
                 </button>
             </div>
@@ -1592,16 +1624,28 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             const transportMode = document.getElementById('transport-mode').value;
             const seaFields = document.getElementById('sea-fields');
             const roadFields = document.getElementById('road-fields');
+            const seaRouteFields = document.getElementById('sea-route-fields');
+            const roadRouteFields = document.getElementById('road-route-fields');
+            const cargoFields = document.getElementById('cargo-fields');
             
             if (transportMode === 'sea') {{
                 seaFields.style.display = 'block';
                 roadFields.style.display = 'none';
+                seaRouteFields.style.display = 'block';
+                roadRouteFields.style.display = 'none';
+                if (cargoFields) cargoFields.style.display = 'block';
             }} else if (transportMode === 'road') {{
                 seaFields.style.display = 'none';
                 roadFields.style.display = 'block';
+                seaRouteFields.style.display = 'none';
+                roadRouteFields.style.display = 'block';
+                if (cargoFields) cargoFields.style.display = 'block';
             }} else {{
                 seaFields.style.display = 'none';
                 roadFields.style.display = 'none';
+                seaRouteFields.style.display = 'none';
+                roadRouteFields.style.display = 'none';
+                if (cargoFields) cargoFields.style.display = 'none';
             }}
             
             updateMRVCalculateButton();
@@ -1689,7 +1733,8 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         function updateMRVCalculateButton() {{
             const transportMode = document.getElementById('transport-mode').value;
             const cargoWeight = parseFloat(document.getElementById('cargo-weight').value) || 0;
-            const btn = document.getElementById('mrv-calculate-btn');
+            const seaBtn = document.getElementById('mrv-calculate-btn');
+            const roadBtn = document.getElementById('mrv-calculate-btn-road');
             
             let isValid = false;
             
@@ -1698,14 +1743,20 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 const vesselSize = document.getElementById('vessel-size').value;
                 const seaFuel = document.getElementById('sea-fuel').value;
                 isValid = selectedMRVOrigin && selectedMRVDestination && vesselType && vesselSize && seaFuel && cargoWeight > 0;
+                if (seaBtn) seaBtn.disabled = !isValid;
             }} else if (transportMode === 'road') {{
                 const roadMode = document.getElementById('road-mode').value;
                 const loadType = document.getElementById('road-load-type').value;
                 const roadFuel = document.getElementById('road-fuel').value;
-                isValid = selectedMRVOrigin && selectedMRVDestination && roadMode && loadType && roadFuel && cargoWeight > 0;
+                const originLat = parseFloat(document.getElementById('road-origin-lat-mrv').value);
+                const originLon = parseFloat(document.getElementById('road-origin-lon-mrv').value);
+                const destLat = parseFloat(document.getElementById('road-dest-lat-mrv').value);
+                const destLon = parseFloat(document.getElementById('road-dest-lon-mrv').value);
+                
+                isValid = roadMode && loadType && roadFuel && cargoWeight > 0 &&
+                         !isNaN(originLat) && !isNaN(originLon) && !isNaN(destLat) && !isNaN(destLon);
+                if (roadBtn) roadBtn.disabled = !isValid;
             }}
-            
-            btn.disabled = !isValid;
         }}
         
         function updateRoadCalculateButton() {{
@@ -1761,7 +1812,7 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             let html = '';
             
             if (data.distance.success) {{
-                html += `
+            html += `
                     <div class="result-card primary">
                         <div class="result-header">🚢 Maritime Distance</div>
                         <div class="result-value">${{data.distance.distance_nm.toFixed(1)}} <span style="font-size: 1.5rem; color: #64748b;">nm</span></div>
@@ -1805,8 +1856,6 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         }}
         
         function calculateMRV() {{
-            if (!selectedMRVOrigin || !selectedMRVDestination) return;
-            
             const transportMode = document.getElementById('transport-mode').value;
             const cargoWeight = parseFloat(document.getElementById('cargo-weight').value);
             
@@ -1818,17 +1867,29 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             resultsDiv.classList.add('show');
             contentDiv.innerHTML = '<div class="loading">Calculating ETS costs</div>';
             
-            let url = `/api/mrv?transport_mode=${{transportMode}}&origin_lat=${{selectedMRVOrigin.lat}}&origin_lon=${{selectedMRVOrigin.lon}}&dest_lat=${{selectedMRVDestination.lat}}&dest_lon=${{selectedMRVDestination.lon}}&cargo_weight=${{cargoWeight}}`;
+            let url = `/api/mrv?transport_mode=${{transportMode}}&cargo_weight=${{cargoWeight}}`;
             
             if (transportMode === 'sea') {{
+                if (!selectedMRVOrigin || !selectedMRVDestination) return;
+                
                 const vesselType = document.getElementById('vessel-type').value;
                 const vesselSize = document.getElementById('vessel-size').value;
                 const seaFuel = document.getElementById('sea-fuel').value;
+                
+                url += `&origin_lat=${{selectedMRVOrigin.lat}}&origin_lon=${{selectedMRVOrigin.lon}}&dest_lat=${{selectedMRVDestination.lat}}&dest_lon=${{selectedMRVDestination.lon}}`;
                 url += `&vessel_type=${{encodeURIComponent(vesselType)}}&size=${{encodeURIComponent(vesselSize)}}&fuel=${{encodeURIComponent(seaFuel)}}`;
             }} else if (transportMode === 'road') {{
                 const roadMode = document.getElementById('road-mode').value;
                 const loadType = document.getElementById('road-load-type').value;
                 const roadFuel = document.getElementById('road-fuel').value;
+                const originLat = parseFloat(document.getElementById('road-origin-lat-mrv').value);
+                const originLon = parseFloat(document.getElementById('road-origin-lon-mrv').value);
+                const destLat = parseFloat(document.getElementById('road-dest-lat-mrv').value);
+                const destLon = parseFloat(document.getElementById('road-dest-lon-mrv').value);
+                
+                if (isNaN(originLat) || isNaN(originLon) || isNaN(destLat) || isNaN(destLon)) return;
+                
+                url += `&origin_lat=${{originLat}}&origin_lon=${{originLon}}&dest_lat=${{destLat}}&dest_lon=${{destLon}}`;
                 url += `&road_mode=${{encodeURIComponent(roadMode)}}&load_type=${{encodeURIComponent(loadType)}}&fuel=${{encodeURIComponent(roadFuel)}}`;
             }}
             
