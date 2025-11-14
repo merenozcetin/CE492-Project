@@ -737,7 +737,23 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         except ors.exceptions.ApiError as e:
             # Log error for debugging
             print(f"OpenRouteService API error: {str(e)}")
-            error_response = {'success': False, 'error': f"API Error: {str(e)}"}
+            
+            # Parse error message for user-friendly response
+            error_str = str(e)
+            user_message = "Road routing error"
+            
+            if "Could not find routable point" in error_str or "2010" in error_str:
+                user_message = "⚠️ The coordinates are not near a road. Please ensure your coordinates are within 350 meters of a drivable road."
+            elif "2009" in error_str or "point is out of bounds" in error_str:
+                user_message = "⚠️ The coordinates are outside the available map area. Please check your latitude and longitude values."
+            elif "401" in error_str or "Unauthorized" in error_str:
+                user_message = "⚠️ API authentication error. Please contact support."
+            elif "403" in error_str or "rate limit" in error_str.lower():
+                user_message = "⚠️ API rate limit exceeded. Please try again in a few moments."
+            else:
+                user_message = f"⚠️ Road routing error: {error_str}"
+            
+            error_response = {'success': False, 'error': user_message}
             self.send_response(500)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
@@ -746,7 +762,7 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             # Log error for debugging
             print(f"Road distance calculation error: {str(e)}")
-            error_response = {'success': False, 'error': str(e)}
+            error_response = {'success': False, 'error': f"⚠️ Error: {str(e)}"}
             self.send_response(500)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
