@@ -1388,11 +1388,36 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 return;
             }}
             
-            // Populate initial sea transport options
-            updateSeaDropdowns();
+            console.log('Populating transport options with all_factors...');
             
-            // Populate initial road transport options
-            updateRoadDropdowns();
+            // Populate initial vessel types (all available)
+            const vesselTypeSelect = document.getElementById('vessel-type');
+            if (vesselTypeSelect && transportOptions.sea.vessel_types) {{
+                transportOptions.sea.vessel_types.forEach(type => {{
+                    const option = document.createElement('option');
+                    option.value = type;
+                    option.textContent = type;
+                    vesselTypeSelect.appendChild(option);
+                }});
+                console.log(`Populated ${{transportOptions.sea.vessel_types.length}} vessel types`);
+            }}
+            
+            // Populate initial road modes (all available)
+            const roadModeSelect = document.getElementById('road-mode');
+            if (roadModeSelect && transportOptions.road.modes) {{
+                transportOptions.road.modes.forEach(mode => {{
+                    const option = document.createElement('option');
+                    option.value = mode;
+                    option.textContent = mode;
+                    roadModeSelect.appendChild(option);
+                }});
+                console.log(`Populated ${{transportOptions.road.modes.length}} road modes`);
+            }}
+            
+            // Initialize other dropdowns as disabled
+            document.getElementById('vessel-size').disabled = true;
+            document.getElementById('sea-fuel').disabled = true;
+            document.getElementById('road-fuel').disabled = true;
         }}
         
         function updateSeaDropdowns() {{
@@ -1401,57 +1426,62 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             const seaFuelSelect = document.getElementById('sea-fuel');
             
             if (!vesselTypeSelect || !vesselSizeSelect || !seaFuelSelect) return;
+            if (!transportOptions || !transportOptions.sea) return;
             
             const selectedVesselType = vesselTypeSelect.value;
             const selectedSize = vesselSizeSelect.value;
             
             // Get matching options from all_factors
-            const matchingTypes = new Set();
             const matchingSizes = new Set();
             const matchingFuels = new Set();
             
             transportOptions.sea.all_factors.forEach(factor => {{
-                // Filter by selections
+                // Only filter sizes and fuels based on vessel type (if selected)
                 if (selectedVesselType && factor.vessel_type !== selectedVesselType) return;
-                if (selectedSize && factor.size !== selectedSize) return;
                 
-                matchingTypes.add(factor.vessel_type);
                 matchingSizes.add(factor.size);
-                matchingFuels.add(factor.fuel);
+                
+                // Further filter fuels if size is also selected
+                if (!selectedSize || factor.size === selectedSize) {{
+                    matchingFuels.add(factor.fuel);
+                }}
             }});
             
-            // Update vessel types
-            const vesselTypeValue = vesselTypeSelect.value;
-            vesselTypeSelect.innerHTML = '<option value="">-- Select Vessel Type --</option>';
-            Array.from(matchingTypes).sort().forEach(type => {{
-                const option = document.createElement('option');
-                option.value = type;
-                option.textContent = type;
-                if (type === vesselTypeValue) option.selected = true;
-                vesselTypeSelect.appendChild(option);
-            }});
+            // Update sizes (only if vessel type is selected)
+            if (selectedVesselType) {{
+                const sizeValue = vesselSizeSelect.value;
+                vesselSizeSelect.innerHTML = '<option value="">-- Select Size --</option>';
+                const sortedSizes = Array.from(matchingSizes).sort();
+                sortedSizes.forEach(size => {{
+                    const option = document.createElement('option');
+                    option.value = size;
+                    option.textContent = size;
+                    if (size === sizeValue) option.selected = true;
+                    vesselSizeSelect.appendChild(option);
+                }});
+                vesselSizeSelect.disabled = false;
+            }} else {{
+                vesselSizeSelect.innerHTML = '<option value="">-- Select Size --</option>';
+                vesselSizeSelect.disabled = true;
+            }}
             
-            // Update sizes
-            const sizeValue = vesselSizeSelect.value;
-            vesselSizeSelect.innerHTML = '<option value="">-- Select Size --</option>';
-            Array.from(matchingSizes).sort().forEach(size => {{
-                const option = document.createElement('option');
-                option.value = size;
-                option.textContent = size;
-                if (size === sizeValue) option.selected = true;
-                vesselSizeSelect.appendChild(option);
-            }});
-            
-            // Update fuels
-            const fuelValue = seaFuelSelect.value;
-            seaFuelSelect.innerHTML = '<option value="">-- Select Fuel --</option>';
-            Array.from(matchingFuels).sort().forEach(fuel => {{
-                const option = document.createElement('option');
-                option.value = fuel;
-                option.textContent = fuel;
-                if (fuel === fuelValue) option.selected = true;
-                seaFuelSelect.appendChild(option);
-            }});
+            // Update fuels (only if both vessel type and size are selected)
+            if (selectedVesselType && selectedSize) {{
+                const fuelValue = seaFuelSelect.value;
+                seaFuelSelect.innerHTML = '<option value="">-- Select Fuel --</option>';
+                const sortedFuels = Array.from(matchingFuels).sort();
+                sortedFuels.forEach(fuel => {{
+                    const option = document.createElement('option');
+                    option.value = fuel;
+                    option.textContent = fuel;
+                    if (fuel === fuelValue) option.selected = true;
+                    seaFuelSelect.appendChild(option);
+                }});
+                seaFuelSelect.disabled = false;
+            }} else {{
+                seaFuelSelect.innerHTML = '<option value="">-- Select Fuel --</option>';
+                seaFuelSelect.disabled = true;
+            }}
         }}
         
         function updateRoadDropdowns() {{
@@ -1459,42 +1489,37 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             const roadFuelSelect = document.getElementById('road-fuel');
             
             if (!roadModeSelect || !roadFuelSelect) return;
+            if (!transportOptions || !transportOptions.road) return;
             
             const selectedRoadMode = roadModeSelect.value;
             
-            // Get matching options from all_factors
-            const matchingModes = new Set();
+            // Get matching fuels based on selected mode
             const matchingFuels = new Set();
             
             transportOptions.road.all_factors.forEach(factor => {{
-                // Filter by selections
+                // Only filter fuels based on mode (if selected)
                 if (selectedRoadMode && factor.mode !== selectedRoadMode) return;
                 
-                matchingModes.add(factor.mode);
                 matchingFuels.add(factor.fuel);
             }});
             
-            // Update road modes
-            const modeValue = roadModeSelect.value;
-            roadModeSelect.innerHTML = '<option value="">-- Select Vehicle Mode --</option>';
-            Array.from(matchingModes).sort().forEach(mode => {{
-                const option = document.createElement('option');
-                option.value = mode;
-                option.textContent = mode;
-                if (mode === modeValue) option.selected = true;
-                roadModeSelect.appendChild(option);
-            }});
-            
-            // Update fuels
-            const fuelValue = roadFuelSelect.value;
-            roadFuelSelect.innerHTML = '<option value="">-- Select Fuel --</option>';
-            Array.from(matchingFuels).sort().forEach(fuel => {{
-                const option = document.createElement('option');
-                option.value = fuel;
-                option.textContent = fuel;
-                if (fuel === fuelValue) option.selected = true;
-                roadFuelSelect.appendChild(option);
-            }});
+            // Update fuels (only if road mode is selected)
+            if (selectedRoadMode) {{
+                const fuelValue = roadFuelSelect.value;
+                roadFuelSelect.innerHTML = '<option value="">-- Select Fuel --</option>';
+                const sortedFuels = Array.from(matchingFuels).sort();
+                sortedFuels.forEach(fuel => {{
+                    const option = document.createElement('option');
+                    option.value = fuel;
+                    option.textContent = fuel;
+                    if (fuel === fuelValue) option.selected = true;
+                    roadFuelSelect.appendChild(option);
+                }});
+                roadFuelSelect.disabled = false;
+            }} else {{
+                roadFuelSelect.innerHTML = '<option value="">-- Select Fuel --</option>';
+                roadFuelSelect.disabled = true;
+            }}
         }}
         
         function updateTransportFields() {{
