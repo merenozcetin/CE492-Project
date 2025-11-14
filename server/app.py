@@ -755,21 +755,30 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
     
     def is_coordinate_in_eea(self, lat, lon):
         """
-        Determine if coordinates are in EEA territory using a simple bounding box
-        EEA Region Approximate Borders:
+        Determine if coordinates are in EEA territory using a conservative bounding box
+        EEA Region Approximate Borders (excluding Turkey, Russia, Ukraine, Belarus, etc.):
         - North: 71° N (Northern tip of Norway)
-        - South: 35° N (Southern Cyprus/Crete)
+        - South: 35° N (Southern Cyprus/Crete) 
         - West: 25° W (Western Iceland)
-        - East: 32° E (Eastern Cyprus/Finland)
+        - East: 28° E (Eastern Finland/Estonia - BEFORE Turkey/Russia border)
+        
+        Note: This is a simplified rectangular approximation.
+        Cyprus (EEA member) is at ~33-35°E, so we use a more restrictive eastern boundary
+        to exclude Turkey, Russia, Ukraine, Belarus while keeping most of EEA.
         """
-        # Simple rectangular bounding box for EEA region
-        EEA_NORTH = 71.0
-        EEA_SOUTH = 35.0
-        EEA_WEST = -25.0
-        EEA_EAST = 32.0
+        # Conservative rectangular bounding box for EEA region
+        EEA_NORTH = 71.0   # Norway
+        EEA_SOUTH = 35.0   # Cyprus/Crete
+        EEA_WEST = -25.0   # Iceland
+        EEA_EAST = 28.0    # Finland/Estonia (before Turkey at ~26-45°E)
         
         # Check if coordinates fall within EEA bounding box
         is_in_eea = (EEA_SOUTH <= lat <= EEA_NORTH) and (EEA_WEST <= lon <= EEA_EAST)
+        
+        # Special case: Cyprus is EEA but outside the main box (33-34°E)
+        # Add Cyprus exception
+        if 34.5 <= lat <= 35.7 and 32.3 <= lon <= 34.6:
+            is_in_eea = True
         
         return is_in_eea
     
