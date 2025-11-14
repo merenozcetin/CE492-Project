@@ -94,10 +94,15 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
     def handle_transport_options(self):
         """Handle request for transport options (sea vessel types/sizes/fuels, road modes/fuels)"""
         try:
+            query_params = urllib.parse.parse_qs(self.path.split('?')[1]) if '?' in self.path else {}
+            vessel_type_filter = query_params.get('vessel_type', [''])[0]
+            size_filter = query_params.get('size', [''])[0]
+            road_mode_filter = query_params.get('road_mode', [''])[0]
+            
             sea_factors = self.load_sea_emission_factors()
             road_factors = self.load_road_emission_factors()
             
-            # Extract unique vessel types, sizes, and fuels for sea transport
+            # For sea transport with conditional filtering
             sea_vessel_types = set()
             sea_sizes = set()
             sea_fuels = set()
@@ -107,6 +112,12 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 size = data.get('size', '').strip()
                 fuel = data.get('fuel', '').strip()
                 
+                # Apply filters
+                if vessel_type_filter and vessel_type != vessel_type_filter:
+                    continue
+                if size_filter and size != size_filter:
+                    continue
+                
                 if vessel_type:
                     sea_vessel_types.add(vessel_type)
                 if size:
@@ -114,7 +125,7 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 if fuel:
                     sea_fuels.add(fuel)
             
-            # Extract unique modes and fuels for road transport
+            # For road transport with conditional filtering
             road_modes = set()
             road_fuels = set()
             
@@ -122,36 +133,45 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 mode = data.get('mode', '').strip()
                 fuel = data.get('fuel', '').strip()
                 
+                # Apply filter
+                if road_mode_filter and mode != road_mode_filter:
+                    continue
+                
                 if mode:
                     road_modes.add(mode)
                 if fuel:
                     road_fuels.add(fuel)
             
+            # Return all emission factors for client-side filtering
+            sea_factors_list = []
+            for key, data in sea_factors.items():
+                sea_factors_list.append(data)
+            
+            road_factors_list = []
+            for key, data in road_factors.items():
+                road_factors_list.append(data)
+            
             result = {
                 'sea': {
                     'vessel_types': sorted(list(sea_vessel_types)),
                     'sizes': sorted(list(sea_sizes)),
-                    'fuels': sorted(list(sea_fuels))
+                    'fuels': sorted(list(sea_fuels)),
+                    'all_factors': sea_factors_list
                 },
                 'road': {
                     'modes': sorted(list(road_modes)),
-                    'fuels': sorted(list(road_fuels))
+                    'fuels': sorted(list(road_fuels)),
+                    'all_factors': road_factors_list
                 }
             }
             
             print(f"Transport options: {len(sea_vessel_types)} vessel types, {len(road_modes)} road modes", flush=True)
-            print(f"Sea vessel types: {sorted(list(sea_vessel_types))}", flush=True)
-            print(f"Road modes: {sorted(list(road_modes))}", flush=True)
-            
-            json_response = json.dumps(result)
-            print(f"Response JSON length: {len(json_response)}", flush=True)
             
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            self.wfile.write(json_response.encode())
-            self.wfile.flush()
+            self.wfile.write(json.dumps(result).encode())
             
         except Exception as e:
             print(f"Error in handle_transport_options: {e}")
@@ -1163,14 +1183,14 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 
                 <div class="form-group">
                     <label class="form-label" for="vessel-type">Vessel Type</label>
-                    <select id="vessel-type" class="form-input" onchange="updateMRVCalculateButton()">
+                    <select id="vessel-type" class="form-input" onchange="updateSeaDropdowns(); updateMRVCalculateButton();">
                         <option value="">-- Select Vessel Type --</option>
                     </select>
                 </div>
                 
                 <div class="form-group">
                     <label class="form-label" for="vessel-size">Size (dwt)</label>
-                    <select id="vessel-size" class="form-input" onchange="updateMRVCalculateButton()">
+                    <select id="vessel-size" class="form-input" onchange="updateSeaDropdowns(); updateMRVCalculateButton();">
                         <option value="">-- Select Size --</option>
                     </select>
                 </div>
@@ -1189,7 +1209,7 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 
                 <div class="form-group">
                     <label class="form-label" for="road-mode">Vehicle Mode</label>
-                    <select id="road-mode" class="form-input" onchange="updateMRVCalculateButton()">
+                    <select id="road-mode" class="form-input" onchange="updateRoadDropdowns(); updateMRVCalculateButton();">
                         <option value="">-- Select Vehicle Mode --</option>
                     </select>
                 </div>
@@ -1368,69 +1388,113 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 return;
             }}
             
-            // Populate sea transport options
+            // Populate initial sea transport options
+            updateSeaDropdowns();
+            
+            // Populate initial road transport options
+            updateRoadDropdowns();
+        }}
+        
+        function updateSeaDropdowns() {{
             const vesselTypeSelect = document.getElementById('vessel-type');
             const vesselSizeSelect = document.getElementById('vessel-size');
             const seaFuelSelect = document.getElementById('sea-fuel');
             
-            if (!vesselTypeSelect || !vesselSizeSelect || !seaFuelSelect) {{
-                console.error('Sea transport select elements not found');
-                return;
-            }}
+            if (!vesselTypeSelect || !vesselSizeSelect || !seaFuelSelect) return;
             
-            if (transportOptions.sea.vessel_types && transportOptions.sea.vessel_types.length > 0) {{
-                transportOptions.sea.vessel_types.forEach(type => {{
-                    const option = document.createElement('option');
-                    option.value = type;
-                    option.textContent = type;
-                    vesselTypeSelect.appendChild(option);
-                }});
-            }}
+            const selectedVesselType = vesselTypeSelect.value;
+            const selectedSize = vesselSizeSelect.value;
             
-            if (transportOptions.sea.sizes && transportOptions.sea.sizes.length > 0) {{
-                transportOptions.sea.sizes.forEach(size => {{
-                    const option = document.createElement('option');
-                    option.value = size;
-                    option.textContent = size;
-                    vesselSizeSelect.appendChild(option);
-                }});
-            }}
+            // Get matching options from all_factors
+            const matchingTypes = new Set();
+            const matchingSizes = new Set();
+            const matchingFuels = new Set();
             
-            if (transportOptions.sea.fuels && transportOptions.sea.fuels.length > 0) {{
-                transportOptions.sea.fuels.forEach(fuel => {{
-                    const option = document.createElement('option');
-                    option.value = fuel;
-                    option.textContent = fuel;
-                    seaFuelSelect.appendChild(option);
-                }});
-            }}
+            transportOptions.sea.all_factors.forEach(factor => {{
+                // Filter by selections
+                if (selectedVesselType && factor.vessel_type !== selectedVesselType) return;
+                if (selectedSize && factor.size !== selectedSize) return;
+                
+                matchingTypes.add(factor.vessel_type);
+                matchingSizes.add(factor.size);
+                matchingFuels.add(factor.fuel);
+            }});
             
-            // Populate road transport options
+            // Update vessel types
+            const vesselTypeValue = vesselTypeSelect.value;
+            vesselTypeSelect.innerHTML = '<option value="">-- Select Vessel Type --</option>';
+            Array.from(matchingTypes).sort().forEach(type => {{
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type;
+                if (type === vesselTypeValue) option.selected = true;
+                vesselTypeSelect.appendChild(option);
+            }});
+            
+            // Update sizes
+            const sizeValue = vesselSizeSelect.value;
+            vesselSizeSelect.innerHTML = '<option value="">-- Select Size --</option>';
+            Array.from(matchingSizes).sort().forEach(size => {{
+                const option = document.createElement('option');
+                option.value = size;
+                option.textContent = size;
+                if (size === sizeValue) option.selected = true;
+                vesselSizeSelect.appendChild(option);
+            }});
+            
+            // Update fuels
+            const fuelValue = seaFuelSelect.value;
+            seaFuelSelect.innerHTML = '<option value="">-- Select Fuel --</option>';
+            Array.from(matchingFuels).sort().forEach(fuel => {{
+                const option = document.createElement('option');
+                option.value = fuel;
+                option.textContent = fuel;
+                if (fuel === fuelValue) option.selected = true;
+                seaFuelSelect.appendChild(option);
+            }});
+        }}
+        
+        function updateRoadDropdowns() {{
             const roadModeSelect = document.getElementById('road-mode');
             const roadFuelSelect = document.getElementById('road-fuel');
             
-            if (!roadModeSelect || !roadFuelSelect) {{
-                console.error('Road transport select elements not found');
-                return;
-            }}
+            if (!roadModeSelect || !roadFuelSelect) return;
             
-            if (transportOptions.road.modes && transportOptions.road.modes.length > 0) {{
-                transportOptions.road.modes.forEach(mode => {{
-                    const option = document.createElement('option');
-                    option.value = mode;
-                    option.textContent = mode;
-                    roadModeSelect.appendChild(option);
-                }});
-            }}
+            const selectedRoadMode = roadModeSelect.value;
             
-            if (transportOptions.road.fuels && transportOptions.road.fuels.length > 0) {{
-                transportOptions.road.fuels.forEach(fuel => {{
-                    const option = document.createElement('option');
-                    option.value = fuel;
-                    option.textContent = fuel;
-                    roadFuelSelect.appendChild(option);
-                }});
-            }}
+            // Get matching options from all_factors
+            const matchingModes = new Set();
+            const matchingFuels = new Set();
+            
+            transportOptions.road.all_factors.forEach(factor => {{
+                // Filter by selections
+                if (selectedRoadMode && factor.mode !== selectedRoadMode) return;
+                
+                matchingModes.add(factor.mode);
+                matchingFuels.add(factor.fuel);
+            }});
+            
+            // Update road modes
+            const modeValue = roadModeSelect.value;
+            roadModeSelect.innerHTML = '<option value="">-- Select Vehicle Mode --</option>';
+            Array.from(matchingModes).sort().forEach(mode => {{
+                const option = document.createElement('option');
+                option.value = mode;
+                option.textContent = mode;
+                if (mode === modeValue) option.selected = true;
+                roadModeSelect.appendChild(option);
+            }});
+            
+            // Update fuels
+            const fuelValue = roadFuelSelect.value;
+            roadFuelSelect.innerHTML = '<option value="">-- Select Fuel --</option>';
+            Array.from(matchingFuels).sort().forEach(fuel => {{
+                const option = document.createElement('option');
+                option.value = fuel;
+                option.textContent = fuel;
+                if (fuel === fuelValue) option.selected = true;
+                roadFuelSelect.appendChild(option);
+            }});
         }}
         
         function updateTransportFields() {{
