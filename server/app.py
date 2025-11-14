@@ -29,6 +29,13 @@ try:
 except ImportError:
     ORS_AVAILABLE = False
 
+try:
+    import geopandas as gpd
+    from shapely.geometry import Point
+    GEOPANDAS_AVAILABLE = True
+except ImportError:
+    GEOPANDAS_AVAILABLE = False
+
 # Add tools directory to path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'tools'))
 # Set current directory to server directory
@@ -794,41 +801,68 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(error_response).encode())
     
+    _eea_geometry = None  # Cache for GeoDataFrame
+    
     def is_coordinate_in_eea(self, lat, lon):
         """
         Determine if coordinates are in EEA territory
-        Uses a simplified multi-region approach to approximate EEA boundaries
+        Uses GeoPackage file with actual country boundaries for accurate detection
+        Falls back to bounding box if GeoPackage is unavailable
         
         EEA includes: EU-27 + Iceland, Liechtenstein, Norway
         """
-        # Main Europe box (excludes Turkey, Russia, Ukraine, Belarus, etc.)
-        # Covers: Most of EU, Norway, Sweden, Finland (west of 28°E)
-        if 35.0 <= lat <= 71.0 and -25.0 <= lon <= 28.0:
-            # Exclude Turkey (roughly south of 42°N and east of 26°E)
-            if lat < 42.0 and lon > 26.0:
-                return False  # This is Turkey region
+        # Try using GeoPackage for accurate detection
+        if GEOPANDAS_AVAILABLE:
+            try:
+                # Load and cache the GeoDataFrame
+                if CalculatorHandler._eea_geometry is None:
+                    # EEA country codes (ISO 2-letter codes)
+                    eea_countries = [
+                        'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR',
+                        'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL',
+                        'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE',  # EU-27
+                        'IS', 'LI', 'NO'  # EFTA in EEA
+                    ]
+                    
+                    # Load country boundaries from GeoPackage
+                    gdf = gpd.read_file('data/CNTR_RG_20M_2024_3035.gpkg')
+                    
+                    # Filter to EEA countries only
+                    eea_gdf = gdf[gdf['CNTR_ID'].isin(eea_countries)]
+                    
+                    # Combine all geometries into one
+                    CalculatorHandler._eea_geometry = eea_gdf.unary_union
+                    print(f"Loaded EEA boundaries for {len(eea_countries)} countries", flush=True)
+                
+                # Create point and check if it's within EEA
+                point = Point(lon, lat)
+                is_in_eea = CalculatorHandler._eea_geometry.contains(point)
+                
+                return is_in_eea
+                
+            except Exception as e:
+                print(f"GeoPackage error, using fallback: {e}", flush=True)
+                # Fall through to bounding box method
+        
+        # Fallback: Conservative bounding box (less accurate)
+        # Main Europe box - more restrictive to exclude Turkey
+        if 42.0 <= lat <= 71.0 and -10.0 <= lon <= 28.0:
+            # Exclude areas clearly outside EEA
+            # Turkey is roughly: 36-42°N, 26-45°E
+            # This conservative box keeps most of EU but may exclude some edge cases
             return True
         
-        # Special regions for EEA members outside main box:
-        
-        # Cyprus (EEA member, east of main box)
+        # Cyprus (EEA member, special case)
         if 34.5 <= lat <= 35.7 and 32.3 <= lon <= 34.6:
             return True
         
-        # Canary Islands (Spain, part of EEA)
-        if 27.6 <= lat <= 29.4 and -18.2 <= lon <= -13.4:
+        # Canary Islands, Azores, Madeira (EEA territories)
+        if 27.6 <= lat <= 29.4 and -18.2 <= lon <= -13.4:  # Canary Islands
             return True
-        
-        # Azores (Portugal, part of EEA)
-        if 36.9 <= lat <= 39.7 and -31.3 <= lon <= -25.0:
+        if 36.9 <= lat <= 39.7 and -31.3 <= lon <= -25.0:  # Azores
             return True
-        
-        # Madeira (Portugal, part of EEA)
-        if 32.4 <= lat <= 33.1 and -17.3 <= lon <= -16.3:
+        if 32.4 <= lat <= 33.1 and -17.3 <= lon <= -16.3:  # Madeira
             return True
-        
-        # French overseas territories in Europe (if any)
-        # Guadeloupe, Martinique, etc. are NOT in EEA for road transport purposes
         
         return False
     
