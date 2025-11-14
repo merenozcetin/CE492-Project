@@ -568,25 +568,30 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps(error_response).encode())
                 return
             
-            # Load ports to determine ETS coverage
-            ports = self.load_ports()
-            origin_port = None
-            dest_port = None
-            
-            # Find closest ports (simplified - in production would use distance calculation)
-            for port in ports:
-                if abs(port['lat'] - origin_lat) < 0.01 and abs(port['lon'] - origin_lon) < 0.01:
-                    origin_port = port
-                    break
-            
-            for port in ports:
-                if abs(port['lat'] - dest_lat) < 0.01 and abs(port['lon'] - dest_lon) < 0.01:
-                    dest_port = port
-                    break
-            
-            # Determine ETS coverage
-            origin_eea = origin_port.get('is_eea', False) if origin_port else False
-            dest_eea = dest_port.get('is_eea', False) if dest_port else False
+            # Determine ETS coverage based on transport mode
+            if transport_mode == 'sea':
+                # For sea transport, use port matching
+                ports = self.load_ports()
+                origin_port = None
+                dest_port = None
+                
+                # Find closest ports
+                for port in ports:
+                    if abs(port['lat'] - origin_lat) < 0.01 and abs(port['lon'] - origin_lon) < 0.01:
+                        origin_port = port
+                        break
+                
+                for port in ports:
+                    if abs(port['lat'] - dest_lat) < 0.01 and abs(port['lon'] - dest_lon) < 0.01:
+                        dest_port = port
+                        break
+                
+                origin_eea = origin_port.get('is_eea', False) if origin_port else False
+                dest_eea = dest_port.get('is_eea', False) if dest_port else False
+            else:
+                # For road transport, use reverse geocoding to determine country
+                origin_eea = self.is_coordinate_in_eea(origin_lat, origin_lon)
+                dest_eea = self.is_coordinate_in_eea(dest_lat, dest_lon)
             
             if origin_eea and dest_eea:
                 coverage = 1.0  # 100% intra-EEA
