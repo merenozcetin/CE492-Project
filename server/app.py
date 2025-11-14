@@ -1449,6 +1449,7 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             // Initialize other dropdowns as disabled
             document.getElementById('vessel-size').disabled = true;
             document.getElementById('sea-fuel').disabled = true;
+            document.getElementById('road-load-type').disabled = true;
             document.getElementById('road-fuel').disabled = true;
         }}
         
@@ -1518,25 +1519,54 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         
         function updateRoadDropdowns() {{
             const roadModeSelect = document.getElementById('road-mode');
+            const roadLoadTypeSelect = document.getElementById('road-load-type');
             const roadFuelSelect = document.getElementById('road-fuel');
             
-            if (!roadModeSelect || !roadFuelSelect) return;
+            if (!roadModeSelect || !roadLoadTypeSelect || !roadFuelSelect) return;
             if (!transportOptions || !transportOptions.road) return;
             
             const selectedRoadMode = roadModeSelect.value;
+            const selectedLoadType = roadLoadTypeSelect.value;
             
-            // Get matching fuels based on selected mode
+            // Get matching load types and fuels based on selections
+            const matchingLoadTypes = new Set();
             const matchingFuels = new Set();
             
             transportOptions.road.all_factors.forEach(factor => {{
-                // Only filter fuels based on mode (if selected)
+                // Filter by mode (if selected)
                 if (selectedRoadMode && factor.mode !== selectedRoadMode) return;
                 
-                matchingFuels.add(factor.fuel);
+                // Add load types for this mode
+                if (factor.load_type) {{
+                    matchingLoadTypes.add(factor.load_type);
+                }}
+                
+                // Filter fuels further if load type is also selected
+                if (!selectedLoadType || factor.load_type === selectedLoadType) {{
+                    matchingFuels.add(factor.fuel);
+                }}
             }});
             
-            // Update fuels (only if road mode is selected)
+            // Update load types (only if mode is selected)
             if (selectedRoadMode) {{
+                const loadTypeValue = roadLoadTypeSelect.value;
+                roadLoadTypeSelect.innerHTML = '<option value="">-- Select Load Type --</option>';
+                const sortedLoadTypes = Array.from(matchingLoadTypes).sort();
+                sortedLoadTypes.forEach(loadType => {{
+                    const option = document.createElement('option');
+                    option.value = loadType;
+                    option.textContent = loadType;
+                    if (loadType === loadTypeValue) option.selected = true;
+                    roadLoadTypeSelect.appendChild(option);
+                }});
+                roadLoadTypeSelect.disabled = false;
+            }} else {{
+                roadLoadTypeSelect.innerHTML = '<option value="">-- Select Load Type --</option>';
+                roadLoadTypeSelect.disabled = true;
+            }}
+            
+            // Update fuels (only if mode and load type are selected)
+            if (selectedRoadMode && selectedLoadType) {{
                 const fuelValue = roadFuelSelect.value;
                 roadFuelSelect.innerHTML = '<option value="">-- Select Fuel --</option>';
                 const sortedFuels = Array.from(matchingFuels).sort();
@@ -1666,8 +1696,9 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 isValid = selectedMRVOrigin && selectedMRVDestination && vesselType && vesselSize && seaFuel && cargoWeight > 0;
             }} else if (transportMode === 'road') {{
                 const roadMode = document.getElementById('road-mode').value;
+                const loadType = document.getElementById('road-load-type').value;
                 const roadFuel = document.getElementById('road-fuel').value;
-                isValid = selectedMRVOrigin && selectedMRVDestination && roadMode && roadFuel && cargoWeight > 0;
+                isValid = selectedMRVOrigin && selectedMRVDestination && roadMode && loadType && roadFuel && cargoWeight > 0;
             }}
             
             btn.disabled = !isValid;
@@ -1792,8 +1823,9 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 url += `&vessel_type=${{encodeURIComponent(vesselType)}}&size=${{encodeURIComponent(vesselSize)}}&fuel=${{encodeURIComponent(seaFuel)}}`;
             }} else if (transportMode === 'road') {{
                 const roadMode = document.getElementById('road-mode').value;
+                const loadType = document.getElementById('road-load-type').value;
                 const roadFuel = document.getElementById('road-fuel').value;
-                url += `&road_mode=${{encodeURIComponent(roadMode)}}&fuel=${{encodeURIComponent(roadFuel)}}`;
+                url += `&road_mode=${{encodeURIComponent(roadMode)}}&load_type=${{encodeURIComponent(loadType)}}&fuel=${{encodeURIComponent(roadFuel)}}`;
             }}
             
             fetch(url)
