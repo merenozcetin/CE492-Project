@@ -1256,10 +1256,64 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             text-decoration: none;
         }}
 
+        .header-nav {{
+            display: flex;
+            align-items: center;
+            gap: 2.5rem;
+        }}
+
+        .header-nav-link {{
+            color: var(--primary-foreground);
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: 400;
+            letter-spacing: 0.02em;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }}
+
+        .header-nav-link:hover {{
+            opacity: 1;
+        }}
+
+        .header-nav-link.active {{
+            opacity: 1;
+        }}
+
+        @media (max-width: 900px) {{
+            .header-nav {{
+                display: none;
+            }}
+        }}
+
         .header-right {{
             display: flex;
             align-items: center;
             gap: 1.5rem;
+        }}
+
+        .header-cta {{
+            background: transparent;
+            border: 1px solid var(--primary-foreground);
+            color: var(--primary-foreground);
+            padding: 0.625rem 1.25rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }}
+
+        .header-cta:hover {{
+            background: var(--primary-foreground);
+            color: var(--primary);
+        }}
+
+        @media (max-width: 600px) {{
+            .header-cta {{
+                display: none;
+            }}
         }}
 
         .menu-btn {{
@@ -1298,22 +1352,42 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             z-index: 99;
             display: none;
             padding: 6rem 2rem 2rem;
+            overflow-y: auto;
         }}
 
         .nav-overlay.active {{ display: block; }}
 
         .nav-menu {{
-            max-width: 600px;
+            max-width: 1200px;
             margin: 0 auto;
+            padding-top: 2rem;
+        }}
+
+        .nav-grid {{
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4rem;
+        }}
+
+        @media (max-width: 900px) {{
+            .nav-grid {{
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }}
+        }}
+
+        .nav-column {{
+            display: flex;
+            flex-direction: column;
         }}
 
         .nav-link {{
             display: block;
-            font-size: 1.5rem;
+            font-size: 1.25rem;
             font-weight: 400;
             color: var(--primary-foreground);
             text-decoration: none;
-            padding: 1rem 0;
+            padding: 0.75rem 0;
             border-bottom: 1px solid var(--border-dark);
             transition: opacity 0.2s;
         }}
@@ -1321,12 +1395,76 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         .nav-link:hover {{ opacity: 0.7; }}
 
         .nav-section-label {{
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             text-transform: uppercase;
-            letter-spacing: 0.1em;
+            letter-spacing: 0.15em;
             color: var(--muted);
-            margin-top: 2rem;
+            margin-bottom: 1.5rem;
+            font-weight: 600;
+        }}
+
+        .nav-description {{
+            font-size: 0.9rem;
+            color: var(--muted-foreground);
+            line-height: 1.6;
+            margin-bottom: 2rem;
+        }}
+
+        .nav-widget {{
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-dark);
+            padding: 1.25rem;
+        }}
+
+        .nav-widget-title {{
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--muted);
             margin-bottom: 1rem;
+            font-weight: 600;
+        }}
+
+        .nav-widget-items {{
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }}
+
+        .nav-widget-item {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+
+        .nav-widget-year {{
+            font-size: 0.8rem;
+            color: var(--muted-foreground);
+        }}
+
+        .nav-widget-value {{
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--primary-foreground);
+        }}
+
+        .nav-cta {{
+            background: transparent;
+            border: 1px solid var(--primary-foreground);
+            color: var(--primary-foreground);
+            padding: 0.875rem 1.5rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.15em;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            width: 100%;
+        }}
+
+        .nav-cta:hover {{
+            background: var(--primary-foreground);
+            color: var(--primary);
         }}
 
         .nav-sub-link {{
@@ -2582,16 +2720,41 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
     <!-- Navigation Overlay -->
     <div class="nav-overlay" id="navOverlay">
         <div class="nav-menu">
-            <a href="#" class="nav-link" onclick="navigateToTab('compare'); toggleMenu(); return false;">Compare Routes</a>
-            <a href="#" class="nav-link" onclick="navigateToTab('mrv'); toggleMenu(); return false;">ETS Calculator</a>
-            <a href="#" class="nav-link" onclick="navigateToTab('distance'); toggleMenu(); return false;">Sea Distance</a>
-            <a href="#" class="nav-link" onclick="navigateToTab('road'); toggleMenu(); return false;">Road Distance</a>
-
-            <div class="nav-section-label">CALCULATORS:</div>
-            <a href="#" class="nav-sub-link" onclick="navigateToTab('compare'); toggleMenu(); return false;">Sea vs Road Comparison</a>
-            <a href="#" class="nav-sub-link" onclick="navigateToTab('mrv'); toggleMenu(); return false;">ETS Cost Calculation</a>
-            <a href="#" class="nav-sub-link" onclick="navigateToTab('distance'); toggleMenu(); return false;">Sea Distance</a>
-            <a href="#" class="nav-sub-link" onclick="navigateToTab('road'); toggleMenu(); return false;">Road Distance</a>
+            <div class="nav-grid">
+                <div class="nav-column">
+                    <div class="nav-section-label">NAVIGATION</div>
+                    <a href="#" class="nav-link" onclick="navigateToTab('compare'); return false;">Compare Routes</a>
+                    <a href="#" class="nav-link" onclick="navigateToTab('mrv'); return false;">ETS Calculator</a>
+                    <a href="#" class="nav-link" onclick="navigateToTab('distance'); return false;">Sea Distance</a>
+                    <a href="#" class="nav-link" onclick="navigateToTab('road'); return false;">Road Distance</a>
+                </div>
+                <div class="nav-column">
+                    <div class="nav-section-label">ABOUT</div>
+                    <p class="nav-description">Calculate EU Emissions Trading System costs for maritime and road transport. Compare routes and optimize your logistics carbon footprint.</p>
+                    <div class="nav-widget">
+                        <div class="nav-widget-title">EU ETS PHASE-IN</div>
+                        <div class="nav-widget-items">
+                            <div class="nav-widget-item">
+                                <span class="nav-widget-year">2024</span>
+                                <span class="nav-widget-value">40%</span>
+                            </div>
+                            <div class="nav-widget-item">
+                                <span class="nav-widget-year">2025</span>
+                                <span class="nav-widget-value">70%</span>
+                            </div>
+                            <div class="nav-widget-item">
+                                <span class="nav-widget-year">2026</span>
+                                <span class="nav-widget-value">100%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="nav-column">
+                    <div class="nav-section-label">CONTACT</div>
+                    <p class="nav-description">For enterprise solutions and API access, get in touch with our team.</p>
+                    <button class="nav-cta" onclick="toggleMenu();">GET IN TOUCH</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -2599,7 +2762,14 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
     <div class="header">
         <div class="header-content">
             <a href="#" class="logo">ets-routes</a>
+            <nav class="header-nav">
+                <a href="#" class="header-nav-link active" onclick="switchTab('compare'); return false;">Compare</a>
+                <a href="#" class="header-nav-link" onclick="switchTab('mrv'); return false;">ETS Cost</a>
+                <a href="#" class="header-nav-link" onclick="switchTab('distance'); return false;">Sea Distance</a>
+                <a href="#" class="header-nav-link" onclick="switchTab('road'); return false;">Road Distance</a>
+            </nav>
             <div class="header-right">
+                <button class="header-cta" onclick="navigateToTab('compare')">GET STARTED</button>
                 <button class="menu-btn" id="menuBtn" onclick="toggleMenu()">
                     <span></span>
                     <span></span>
@@ -2612,7 +2782,7 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
     <!-- Hero Section -->
     <div class="hero">
         <div class="hero-content">
-            <h1>Route &<br>ETS Calculator.</h1>
+            <h1>ETS Cost Calculator</h1>
             <p>Calculate shipping distances and EU Emissions Trading System costs with precision. Compare sea and road transport options.</p>
             <div class="hero-buttons">
                 <button class="btn-hero-outline" onclick="navigateToTab('compare')">COMPARE ROUTES</button>
@@ -2622,22 +2792,10 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
     </div>
 
     <div class="container">
-        <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('compare')">COMPARE ROUTES</button>
-            <button class="tab-btn" onclick="switchTab('mrv')">ETS COST</button>
-            <button class="tab-btn" onclick="switchTab('distance')">SEA DISTANCE</button>
-            <button class="tab-btn" onclick="switchTab('road')">ROAD DISTANCE</button>
-        </div>
-        
         <!-- Compare Routes Tab -->
         <div id="compare-tab" class="tab-content active">
             <!-- ETS Cost Comparison Wizard -->
             <div class="card wizard-container" id="comparison-wizard">
-                <div class="wizard-header">
-                    <h2 class="card-title">SEA VS ROAD COMPARISON</h2>
-                    <p class="card-subtitle">Compare ETS costs between maritime and road transport</p>
-                </div>
-
                 <div class="wizard-body">
                     <!-- Step Indicator -->
                     <div class="wizard-steps">
@@ -3577,11 +3735,20 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         }}
         
         function switchTab(tab) {{
+            // Update tab content
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            
             document.getElementById(tab + '-tab').classList.add('active');
-            event.target.classList.add('active');
+
+            // Update tab buttons
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            const tabMap = {{ 'compare': 0, 'mrv': 1, 'distance': 2, 'road': 3 }};
+            const tabBtns = document.querySelectorAll('.tab-btn');
+            if (tabBtns[tabMap[tab]]) tabBtns[tabMap[tab]].classList.add('active');
+
+            // Update header nav links
+            document.querySelectorAll('.header-nav-link').forEach(link => link.classList.remove('active'));
+            const headerNavLinks = document.querySelectorAll('.header-nav-link');
+            if (headerNavLinks[tabMap[tab]]) headerNavLinks[tabMap[tab]].classList.add('active');
         }}
         
         function calculateDistance() {{
