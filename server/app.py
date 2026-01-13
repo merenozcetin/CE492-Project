@@ -61,6 +61,10 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_transport_options()
         elif self.path.startswith('/api/road-distance'):
             self.handle_road_distance()
+        elif self.path.startswith('/api/geocode'):
+            self.handle_geocode()
+        elif self.path.startswith('/api/route-geometry'):
+            self.handle_route_geometry()
         else:
             super().do_GET()
     
@@ -220,7 +224,257 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(json.dumps(error_response).encode())
-    
+
+    def handle_geocode(self):
+        """Handle geocoding requests using Mapbox API"""
+        try:
+            print(f"[GEOCODE] Request received: {self.path}")
+            query_params = urllib.parse.parse_qs(self.path.split('?')[1]) if '?' in self.path else {}
+            query = query_params.get('q', [''])[0]
+            mode = query_params.get('mode', ['search'])[0]
+            print(f"[GEOCODE] Query: '{query}', Mode: {mode}")
+
+            if not query or len(query) < 2:
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': 'Query must be at least 2 characters'}).encode())
+                return
+
+            # Get Mapbox token from environment
+            mapbox_token = os.environ.get('MAPBOX_ACCESS_TOKEN', '')
+            if not mapbox_token:
+                # Try loading from .env.local file
+                env_file = os.path.join(os.path.dirname(__file__), '.env.local')
+                print(f"[GEOCODE] Looking for .env.local at: {env_file}")
+                if os.path.exists(env_file):
+                    print(f"[GEOCODE] Found .env.local file")
+                    with open(env_file, 'r') as f:
+                        for line in f:
+                            if line.startswith('MAPBOX_ACCESS_TOKEN='):
+                                mapbox_token = line.split('=', 1)[1].strip().strip('"\'')
+                                print(f"[GEOCODE] Token loaded: {mapbox_token[:20]}...")
+                                break
+                else:
+                    print(f"[GEOCODE] .env.local file not found")
+
+            if not mapbox_token:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'error': 'Mapbox token not configured'}).encode())
+                return
+
+            # Call Mapbox Geocoding API
+            limit = 1 if mode == 'geocode' else 5
+            encoded_query = urllib.parse.quote(query)
+            mapbox_url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{encoded_query}.json?access_token={mapbox_token}&limit={limit}&types=address,place,poi,locality"
+            print(f"[GEOCODE] Calling Mapbox API...")
+
+            req = urllib.request.Request(mapbox_url, headers={'Accept': 'application/json'})
+            with urllib.request.urlopen(req, timeout=10) as response:
+                mapbox_data = json.loads(response.read().decode())
+
+            print(f"[GEOCODE] Mapbox returned {len(mapbox_data.get('features', []))} features")
+
+            # Transform response
+            if mode == 'search':
+                # Return suggestions for autocomplete
+                suggestions = []
+                for feature in mapbox_data.get('features', []):
+                    # Mapbox returns [lng, lat] order!
+                    lng, lat = feature['center']
+                    context_parts = [c['text'] for c in feature.get('context', [])]
+                    suggestions.append({
+                        'id': feature['id'],
+                        'placeName': feature['place_name'],
+                        'text': feature['text'],
+                        'coordinates': {'lat': lat, 'lng': lng},
+                        'context': ', '.join(context_parts) if context_parts else None
+                    })
+                result = {'success': True, 'data': suggestions}
+            else:
+                # Return single geocode result
+                if mapbox_data.get('features'):
+                    feature = mapbox_data['features'][0]
+                    lng, lat = feature['center']
+                    result = {
+                        'success': True,
+                        'data': {
+                            'coordinates': {'lat': lat, 'lng': lng},
+                            'placeName': feature['text'],
+                            'formattedAddress': feature['place_name']
+                        }
+                    }
+                else:
+                    result = {'success': False, 'error': 'No results found'}
+
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode())
+
+        except urllib.error.URLError as e:
+            print(f"Geocoding URL error: {e}")
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': False, 'error': f'Mapbox API error: {str(e)}'}).encode())
+        except Exception as e:
+            print(f"Geocoding error: {e}")
+            import traceback
+            traceback.print_exc()
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+
+    def handle_route_geometry(self):
+        """Handle route geometry requests for map display"""
+        try:
+            query_params = urllib.parse.parse_qs(self.path.split('?')[1]) if '?' in self.path else {}
+            origin_lat = float(query_params.get('origin_lat', [0])[0])
+            origin_lon = float(query_params.get('origin_lon', [0])[0])
+            dest_lat = float(query_params.get('dest_lat', [0])[0])
+            dest_lon = float(query_params.get('dest_lon', [0])[0])
+            mode = query_params.get('mode', ['sea'])[0]
+
+            print(f"[ROUTE] Getting {mode} route geometry: ({origin_lat}, {origin_lon}) -> ({dest_lat}, {dest_lon})")
+
+            result = {'success': False, 'coordinates': []}
+
+            if mode == 'sea':
+                # Use Java SeaRoute for maritime routes
+                if JAVA_AVAILABLE:
+                    try:
+                        java_wrapper = JavaSeaRouteWrapper()
+                        java_result = java_wrapper.calculate_distance(origin_lon, origin_lat, dest_lon, dest_lat)
+
+                        if java_result['success'] and java_result.get('coordinates'):
+                            # SeaRoute returns MultiLineString coordinates
+                            coords = java_result['coordinates']
+                            # Flatten to single array of [lng, lat] pairs
+                            flat_coords = []
+                            for line_string in coords:
+                                flat_coords.extend(line_string)
+                            result = {
+                                'success': True,
+                                'coordinates': flat_coords,
+                                'distance_km': java_result.get('distance_km', 0),
+                                'distance_nm': java_result.get('distance_nm', 0),
+                                'mode': 'sea'
+                            }
+                            print(f"[ROUTE] Sea route found with {len(flat_coords)} waypoints")
+                        else:
+                            # Fallback to straight line
+                            result = {
+                                'success': True,
+                                'coordinates': [[origin_lon, origin_lat], [dest_lon, dest_lat]],
+                                'mode': 'sea',
+                                'fallback': True
+                            }
+                    except Exception as e:
+                        print(f"[ROUTE] Sea route error: {e}")
+                        result = {
+                            'success': True,
+                            'coordinates': [[origin_lon, origin_lat], [dest_lon, dest_lat]],
+                            'mode': 'sea',
+                            'fallback': True,
+                            'error': str(e)
+                        }
+                else:
+                    # No Java available, use straight line
+                    result = {
+                        'success': True,
+                        'coordinates': [[origin_lon, origin_lat], [dest_lon, dest_lat]],
+                        'mode': 'sea',
+                        'fallback': True
+                    }
+
+            elif mode == 'road':
+                # Use OpenRouteService for road routes
+                if ORS_AVAILABLE:
+                    try:
+                        api_key = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjljYzg0MGUwOGMzODQ0ODQ4OWI0ZTJkMWMzODcwOGM4IiwiaCI6Im11cm11cjY0In0="
+                        client = ors.Client(key=api_key)
+
+                        routes = client.directions(
+                            coordinates=[[origin_lon, origin_lat], [dest_lon, dest_lat]],
+                            profile='driving-car',
+                            format='geojson'
+                        )
+
+                        if routes and routes.get('features'):
+                            geometry = routes['features'][0]['geometry']
+                            coords = geometry.get('coordinates', [])
+                            props = routes['features'][0].get('properties', {})
+                            summary = props.get('summary', {})
+
+                            result = {
+                                'success': True,
+                                'coordinates': coords,
+                                'distance_km': round(summary.get('distance', 0) / 1000, 1),
+                                'duration_hours': round(summary.get('duration', 0) / 3600, 2),
+                                'mode': 'road'
+                            }
+                            print(f"[ROUTE] Road route found with {len(coords)} waypoints")
+                        else:
+                            result = {
+                                'success': True,
+                                'coordinates': [[origin_lon, origin_lat], [dest_lon, dest_lat]],
+                                'mode': 'road',
+                                'fallback': True
+                            }
+                    except Exception as e:
+                        error_msg = str(e)
+                        print(f"[ROUTE] Road route error: {e}")
+                        # Check for common ORS errors
+                        if "Unable to find a route" in error_msg or "Could not find routable point" in error_msg:
+                            result = {
+                                'success': True,
+                                'coordinates': [[origin_lon, origin_lat], [dest_lon, dest_lat]],
+                                'mode': 'road',
+                                'fallback': True,
+                                'error': 'No road route available between these points'
+                            }
+                        else:
+                            result = {
+                                'success': True,
+                                'coordinates': [[origin_lon, origin_lat], [dest_lon, dest_lat]],
+                                'mode': 'road',
+                                'fallback': True,
+                                'error': error_msg
+                            }
+                else:
+                    result = {
+                        'success': True,
+                        'coordinates': [[origin_lon, origin_lat], [dest_lon, dest_lat]],
+                        'mode': 'road',
+                        'fallback': True,
+                        'error': 'OpenRouteService not available'
+                    }
+
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode())
+
+        except Exception as e:
+            print(f"[ROUTE] Error: {e}")
+            import traceback
+            traceback.print_exc()
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'success': False, 'error': str(e)}).encode())
+
     def calculate_distances(self, origin_lat, origin_lon, dest_lat, dest_lon):
         """Calculate distances using Java SeaRoute"""
         result = {
@@ -618,10 +872,11 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                         dest_port = port
                         break
                 
-                origin_eea = origin_port.get('is_eea', False) if origin_port else False
-                dest_eea = dest_port.get('is_eea', False) if dest_port else False
+                # Use GeoPackage-based detection for accurate EEA check
+                origin_eea = self.is_coordinate_in_eea(origin_lat, origin_lon)
+                dest_eea = self.is_coordinate_in_eea(dest_lat, dest_lon)
             else:
-                # For road transport, use reverse geocoding to determine country
+                # For road transport, use same GeoPackage-based detection
                 origin_eea = self.is_coordinate_in_eea(origin_lat, origin_lon)
                 dest_eea = self.is_coordinate_in_eea(dest_lat, dest_lon)
             
@@ -826,13 +1081,17 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                     
                     # Load country boundaries from GeoPackage
                     gdf = gpd.read_file('data/CNTR_RG_20M_2024_3035.gpkg')
-                    
+
                     # Filter to EEA countries only
                     eea_gdf = gdf[gdf['CNTR_ID'].isin(eea_countries)]
-                    
+
+                    # Reproject from EPSG:3035 to EPSG:4326 (WGS84 lat/lon)
+                    # The GeoPackage uses ETRS89-LAEA (meters), but we need WGS84 for lat/lon coordinates
+                    eea_gdf = eea_gdf.to_crs(epsg=4326)
+
                     # Combine all geometries into one
                     CalculatorHandler._eea_geometry = eea_gdf.unary_union
-                    print(f"Loaded EEA boundaries for {len(eea_countries)} countries", flush=True)
+                    print(f"Loaded EEA boundaries for {len(eea_countries)} countries (reprojected to WGS84)", flush=True)
                 
                 # Create point and check if it's within EEA
                 point = Point(lon, lat)
@@ -880,12 +1139,14 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 port_country = str(port.get('country', '')).lower()
                 
                 if (search_term in port_name or search_term in port_country):
+                    lat = float(port.get('lat', 0))
+                    lon = float(port.get('lon', 0))
                     matches.append({
                         'name': port.get('name', ''),
                         'country': port.get('country', ''),
-                        'lat': float(port.get('lat', 0)),
-                        'lon': float(port.get('lon', 0)),
-                        'is_eea': port.get('is_eea', False)
+                        'lat': lat,
+                        'lon': lon,
+                        'is_eea': self.is_coordinate_in_eea(lat, lon)
                     })
             except (ValueError, TypeError) as e:
                 # Skip ports with invalid data
@@ -912,108 +1173,357 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maritime Distance & ETS Calculator</title>
+    <title>routets - Maritime Distance & ETS Calculator</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Mapbox GL JS -->
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet" />
+    <!-- Chart.js for ETS cost comparison charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <style>
+        /* ========================================
+           ERGUVAN-INSPIRED DESIGN SYSTEM
+           Black & White Minimal Theme
+           ======================================== */
+
+        :root {{
+            --background: #ffffff;
+            --foreground: #0a0a0a;
+            --primary: #0a0a0a;
+            --primary-dark: #1a1a1a;
+            --primary-foreground: #ffffff;
+            --secondary: #f5f5f5;
+            --muted: #64748b;
+            --muted-foreground: #94a3b8;
+            --success: #16a34a;
+            --success-bg: #dcfce7;
+            --success-border: #86efac;
+            --success-text: #166534;
+            --info: #2563eb;
+            --info-bg: #f5f5f5;
+            --warning-bg: #f5f5f5;
+            --border: #e5e5e5;
+            --border-dark: #333333;
+            --card: #ffffff;
+            --radius: 0px;
+            --error: #dc2626;
+            --error-muted: #fee2e2;
+        }}
+
         * {{
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }}
-        
+
         body {{
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #f8fafc;
-            color: #1e293b;
+            background: var(--background);
+            color: var(--foreground);
             line-height: 1.6;
             min-height: 100vh;
         }}
-        
+
+        /* ========================================
+           HEADER - Minimal Erguvan Style
+           ======================================== */
+
         .header {{
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            color: white;
-            padding: 2rem 1.5rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            background: var(--primary);
+            color: var(--primary-foreground);
+            padding: 1rem 1.5rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid var(--border-dark);
         }}
-        
+
         .header-content {{
             max-width: 1200px;
             margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }}
-        
-        .header h1 {{
-            font-size: 1.875rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-            letter-spacing: -0.025em;
-        }}
-        
-        .header p {{
-            font-size: 0.95rem;
-            color: #94a3b8;
+
+        .logo {{
+            font-size: 1.25rem;
             font-weight: 400;
+            letter-spacing: -0.02em;
+            color: var(--primary-foreground);
+            text-decoration: none;
         }}
-        
+
+        .header-right {{
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }}
+
+        .menu-btn {{
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            padding: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }}
+
+        .menu-btn span {{
+            display: block;
+            width: 24px;
+            height: 2px;
+            background: var(--primary-foreground);
+            transition: all 0.3s ease;
+        }}
+
+        .menu-btn.active span:nth-child(1) {{ transform: rotate(45deg) translate(5px, 5px); }}
+        .menu-btn.active span:nth-child(2) {{ opacity: 0; }}
+        .menu-btn.active span:nth-child(3) {{ transform: rotate(-45deg) translate(5px, -5px); }}
+
+        /* ========================================
+           NAVIGATION OVERLAY
+           ======================================== */
+
+        .nav-overlay {{
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--primary);
+            z-index: 99;
+            display: none;
+            padding: 6rem 2rem 2rem;
+        }}
+
+        .nav-overlay.active {{ display: block; }}
+
+        .nav-menu {{
+            max-width: 600px;
+            margin: 0 auto;
+        }}
+
+        .nav-link {{
+            display: block;
+            font-size: 1.5rem;
+            font-weight: 400;
+            color: var(--primary-foreground);
+            text-decoration: none;
+            padding: 1rem 0;
+            border-bottom: 1px solid var(--border-dark);
+            transition: opacity 0.2s;
+        }}
+
+        .nav-link:hover {{ opacity: 0.7; }}
+
+        .nav-section-label {{
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--muted);
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+        }}
+
+        .nav-sub-link {{
+            display: block;
+            font-size: 1rem;
+            color: var(--muted-foreground);
+            text-decoration: none;
+            padding: 0.75rem 0;
+            transition: color 0.2s;
+        }}
+
+        .nav-sub-link:hover {{ color: var(--primary-foreground); }}
+
+        /* ========================================
+           HERO SECTION
+           ======================================== */
+
+        .hero {{
+            background: var(--primary);
+            color: var(--primary-foreground);
+            padding: 4rem 1.5rem;
+            text-align: left;
+        }}
+
+        .hero-content {{
+            max-width: 1200px;
+            margin: 0 auto;
+        }}
+
+        .hero h1 {{
+            font-size: 3rem;
+            font-weight: 700;
+            line-height: 1.1;
+            margin-bottom: 1rem;
+            letter-spacing: -0.03em;
+        }}
+
+        .hero p {{
+            font-size: 1rem;
+            color: var(--muted);
+            margin-bottom: 2rem;
+            max-width: 500px;
+        }}
+
+        .hero-buttons {{
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }}
+
+        .btn-hero-outline {{
+            background: transparent;
+            color: var(--primary-foreground);
+            border: 2px solid var(--primary-foreground);
+            padding: 1rem 2rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }}
+
+        .btn-hero-outline:hover {{
+            background: var(--primary-foreground);
+            color: var(--primary);
+        }}
+
+        .btn-hero-filled {{
+            background: var(--primary-foreground);
+            color: var(--primary);
+            border: 2px solid var(--primary-foreground);
+            padding: 1rem 2rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }}
+
+        .btn-hero-filled:hover {{ background: var(--secondary); }}
+
+        /* ========================================
+           MAIN CONTAINER
+           ======================================== */
+
         .container {{
             max-width: 1200px;
             margin: 0 auto;
-            padding: 2rem 1.5rem;
+            padding: 3rem 1.5rem;
         }}
-        
+
+        /* ========================================
+           TABS - Erguvan Style
+           ======================================== */
+
         .tabs {{
             display: flex;
-            gap: 0.5rem;
-            margin-bottom: 2rem;
-            border-bottom: 2px solid #e2e8f0;
+            gap: 0;
+            margin-bottom: 3rem;
+            border-bottom: 1px solid var(--border);
             overflow-x: auto;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
         }}
-        
+
+        .tabs::-webkit-scrollbar {{
+            display: none;
+        }}
+
         .tab-btn {{
             background: transparent;
             border: none;
-            padding: 0.875rem 1.5rem;
-            font-size: 0.95rem;
+            padding: 1rem 1.5rem;
+            font-size: 0.875rem;
             font-weight: 500;
             cursor: pointer;
-            border-bottom: 3px solid transparent;
+            border-bottom: 2px solid transparent;
             transition: all 0.2s;
-            color: #64748b;
+            color: var(--muted);
             white-space: nowrap;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: -1px;
         }}
-        
-        .tab-btn:hover {{
-            color: #0f172a;
-            background: #f1f5f9;
-        }}
-        
+
+        .tab-btn:hover {{ color: var(--foreground); }}
+
         .tab-btn.active {{
-            border-bottom-color: #0ea5e9;
-            color: #0ea5e9;
+            border-bottom-color: var(--primary);
+            color: var(--primary);
         }}
-        
-        .tab-content {{
-            display: none;
-        }}
-        
-        .tab-content.active {{
-            display: block;
-        }}
-        
+
+        .tab-content {{ display: none; }}
+        .tab-content.active {{ display: block; }}
+
+        /* ========================================
+           CARDS - Sharp Corners
+           ======================================== */
+
         .card {{
-            background: white;
-            border-radius: 12px;
+            background: var(--card);
+            border: 1px solid var(--border);
             padding: 2rem;
-            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+            transition: border-color 0.2s;
+        }}
+
+        .card:hover {{ border-color: var(--muted); }}
+
+        .card-header {{
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
             margin-bottom: 1.5rem;
         }}
-        
+
+        .card-icon {{
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            flex-shrink: 0;
+            background: var(--secondary);
+            border: 1px solid var(--border);
+        }}
+
+        .card-icon.transport {{ background: var(--secondary); }}
+        .card-icon.sea {{ background: var(--secondary); }}
+        .card-icon.road {{ background: var(--secondary); }}
+        .card-icon.cargo {{ background: var(--secondary); }}
+        .card-icon.route {{ background: var(--secondary); }}
+        .card-icon.success {{ background: var(--secondary); }}
+
         .card-title {{
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0;
+            color: var(--foreground);
+            letter-spacing: 0.05em;
+        }}
+
+        .card-subtitle {{
+            font-size: 0.875rem;
+            color: var(--muted-foreground);
+            margin-top: 0.25rem;
+        }}
+
+        .card-title-standalone {{
             font-size: 1.25rem;
             font-weight: 600;
             margin-bottom: 1.5rem;
-            color: #0f172a;
+            color: var(--foreground);
             display: flex;
             align-items: center;
             gap: 0.5rem;
@@ -1033,90 +1543,134 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         }}
         
         .form-label {{
-            font-weight: 500;
-            font-size: 0.875rem;
-            color: #475569;
+            font-weight: 600;
+            font-size: 0.7rem;
+            color: var(--muted-foreground);
             text-transform: uppercase;
-            letter-spacing: 0.025em;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.5rem;
         }}
         
         .form-input {{
-            padding: 0.75rem 1rem;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
+            padding: 0.875rem 1rem;
+            border: 1px solid var(--border);
             font-size: 1rem;
             transition: all 0.2s;
             font-family: inherit;
-            background: white;
+            background: var(--background);
+            color: var(--foreground);
         }}
-        
+
         .form-input:focus {{
             outline: none;
-            border-color: #0ea5e9;
-            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+            border-color: var(--primary);
+        }}
+
+        .form-input::placeholder {{
+            color: var(--muted-foreground);
         }}
         
         .search-results {{
             max-height: 240px;
             overflow-y: auto;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
+            border: 1px solid var(--border);
             margin-top: 0.5rem;
             display: none;
-            background: white;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            background: var(--background);
         }}
-        
+
         .search-result {{
             padding: 0.875rem 1rem;
             cursor: pointer;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid var(--border);
             transition: background 0.15s;
             font-size: 0.9rem;
         }}
-        
+
         .search-result:hover {{
-            background: #f8fafc;
+            background: var(--secondary);
         }}
-        
+
         .search-result:last-child {{
             border-bottom: none;
         }}
         
         .coordinates-display {{
-            font-family: 'Courier New', monospace;
-            background: #f1f5f9;
+            font-family: 'Inter', sans-serif;
+            background: var(--background);
             padding: 0.75rem 1rem;
-            border-radius: 8px;
+            border-radius: var(--radius);
+            font-size: 0.75rem;
+            color: var(--muted-foreground);
+            border: 1px solid var(--border);
+            margin-top: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }}
+
+        .location-selected {{
+            background: var(--background);
+            border: 1px solid var(--primary);
+            color: var(--foreground);
+            padding: 0.75rem 1rem;
+            border-radius: var(--radius);
+            margin-top: 0.5rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }}
+
+        .location-selected-icon {{
+            color: var(--primary);
+            flex-shrink: 0;
+            margin-top: 2px;
+        }}
+
+        .location-selected-content {{
+            flex: 1;
+        }}
+
+        .location-selected-title {{
+            font-weight: 600;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--muted-foreground);
+        }}
+
+        .location-selected-coords {{
             font-size: 0.875rem;
-            color: #475569;
-            border: 2px solid #e2e8f0;
+            font-family: 'Inter', sans-serif;
+            margin-top: 4px;
+            color: var(--foreground);
+            font-weight: 500;
         }}
         
         .btn-primary {{
-            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
-            color: white;
-            border: none;
-            padding: 1rem 2rem;
-            border-radius: 8px;
-            font-size: 1rem;
+            background: var(--primary);
+            color: var(--primary-foreground);
+            border: 1px solid var(--primary);
+            padding: 0.875rem 1.5rem;
+            font-size: 0.75rem;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
             width: 100%;
             margin-top: 1rem;
-            box-shadow: 0 4px 6px -1px rgba(14, 165, 233, 0.3);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
         }}
-        
+
         .btn-primary:hover:not(:disabled) {{
-            transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(14, 165, 233, 0.4);
+            background: var(--primary-dark);
+            border-color: var(--primary-dark);
         }}
-        
+
         .btn-primary:disabled {{
-            background: #cbd5e1;
+            background: var(--border);
+            border-color: var(--border);
+            color: var(--muted);
             cursor: not-allowed;
-            box-shadow: none;
         }}
         
         .status-badge {{
@@ -1292,28 +1846,1019 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 grid-template-columns: 1fr;
             }}
         }}
+
+        /* Address Search Styles */
+        .address-search-container {{
+            position: relative;
+            width: 100%;
+        }}
+
+        .address-search-input {{
+            padding: 0.75rem 1rem 0.75rem 2.5rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.2s;
+            font-family: inherit;
+            background: white;
+            width: 100%;
+        }}
+
+        .address-search-input:focus {{
+            outline: none;
+            border-color: #0ea5e9;
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+        }}
+
+        .address-search-icon {{
+            position: absolute;
+            left: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #64748b;
+            pointer-events: none;
+        }}
+
+        .address-search-spinner {{
+            position: absolute;
+            right: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            border: 2px solid #e2e8f0;
+            border-top-color: #0ea5e9;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: none;
+        }}
+
+        .address-search-spinner.show {{
+            display: block;
+        }}
+
+        .address-search-clear {{
+            position: absolute;
+            right: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #64748b;
+            cursor: pointer;
+            padding: 4px;
+            display: none;
+        }}
+
+        .address-search-clear.show {{
+            display: block;
+        }}
+
+        .address-search-clear:hover {{
+            color: #0f172a;
+        }}
+
+        .address-suggestions {{
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            max-height: 240px;
+            overflow-y: auto;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            margin-top: 0.25rem;
+            background: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            display: none;
+        }}
+
+        .address-suggestions.show {{
+            display: block;
+        }}
+
+        .address-suggestion {{
+            padding: 0.875rem 1rem;
+            cursor: pointer;
+            border-bottom: 1px solid #f1f5f9;
+            transition: background 0.15s;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }}
+
+        .address-suggestion:hover,
+        .address-suggestion.highlighted {{
+            background: #f8fafc;
+        }}
+
+        .address-suggestion:last-child {{
+            border-bottom: none;
+        }}
+
+        .address-suggestion-icon {{
+            color: #64748b;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }}
+
+        .address-suggestion-content {{
+            flex: 1;
+            min-width: 0;
+        }}
+
+        .address-suggestion-text {{
+            font-weight: 500;
+            font-size: 0.9rem;
+            color: #0f172a;
+        }}
+
+        .address-suggestion-context {{
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-top: 2px;
+        }}
+
+        @keyframes spin {{
+            to {{ transform: translateY(-50%) rotate(360deg); }}
+        }}
+
+        /* Map Styles */
+        .map-container {{
+            height: 400px;
+            border-radius: var(--radius);
+            overflow: hidden;
+            border: 1px solid var(--border);
+            margin-top: 1rem;
+            position: relative;
+            background: var(--secondary);
+        }}
+
+        .map-placeholder {{
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--secondary);
+            color: var(--muted-foreground);
+            font-size: 0.875rem;
+            letter-spacing: 0.05em;
+        }}
+
+        .mapboxgl-popup-content {{
+            padding: 12px 16px;
+            border-radius: var(--radius);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.9rem;
+        }}
+
+        .marker-label {{
+            font-weight: 600;
+            color: var(--foreground);
+        }}
+
+        .marker-coords {{
+            font-size: 0.8rem;
+            color: var(--muted-foreground);
+            margin-top: 4px;
+        }}
+
+        /* Map Legend */
+        .map-legend {{
+            position: absolute;
+            bottom: 1rem;
+            left: 1rem;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 0.75rem 1rem;
+            border-radius: var(--radius);
+            font-size: 0.8rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            z-index: 10;
+            border: 1px solid var(--border);
+        }}
+
+        .legend-title {{
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--foreground);
+        }}
+
+        .legend-item {{
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.375rem;
+        }}
+
+        .legend-item:last-child {{
+            margin-bottom: 0;
+        }}
+
+        .legend-dot {{
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }}
+
+        .legend-dot.origin {{
+            background: var(--success);
+        }}
+
+        .legend-dot.destination {{
+            background: #ef4444;
+        }}
+
+        .legend-line {{
+            width: 20px;
+            height: 4px;
+            border-radius: 2px;
+            background: var(--info);
+            flex-shrink: 0;
+        }}
+
+        .legend-text {{
+            color: var(--muted-foreground);
+        }}
+
+        /* Result card improvements */
+        .result-card-highlight {{
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border-left: 4px solid var(--primary);
+        }}
+
+        .result-icon {{
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }}
+
+        .result-icon.distance {{
+            background: var(--info-bg);
+            color: var(--info);
+        }}
+
+        .result-icon.duration {{
+            background: var(--warning-bg);
+            color: #d97706;
+        }}
+
+        .result-icon.emissions {{
+            background: var(--success-bg);
+            color: var(--success-text);
+        }}
+
+        /* ===== COMPARISON WIZARD STYLES ===== */
+        .wizard-container {{
+            background: var(--background);
+            border: 1px solid var(--border);
+            padding: 0;
+        }}
+
+        .wizard-header {{
+            background: var(--primary);
+            color: var(--primary-foreground);
+            padding: 2rem;
+            text-align: center;
+        }}
+
+        .wizard-header .card-title {{
+            color: var(--primary-foreground);
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+        }}
+
+        .wizard-header .card-subtitle {{
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 0;
+        }}
+
+        .wizard-body {{
+            padding: 2rem;
+        }}
+
+        .wizard-steps {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 0 2rem 0;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--border);
+        }}
+
+        .wizard-step {{
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            opacity: 0.4;
+            transition: all 0.3s ease;
+        }}
+
+        .wizard-step.active {{
+            opacity: 1;
+        }}
+
+        .wizard-step.completed {{
+            opacity: 1;
+        }}
+
+        .wizard-step.completed .wizard-step-number {{
+            background: var(--primary);
+            color: var(--primary-foreground);
+        }}
+
+        .wizard-step-number {{
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--border);
+            color: var(--muted-foreground);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.875rem;
+            transition: all 0.3s ease;
+        }}
+
+        .wizard-step.active .wizard-step-number {{
+            background: var(--primary);
+            color: var(--primary-foreground);
+        }}
+
+        .wizard-step-label {{
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--muted-foreground);
+            letter-spacing: 0.1em;
+        }}
+
+        .wizard-step.active .wizard-step-label {{
+            color: var(--foreground);
+        }}
+
+        .wizard-step-connector {{
+            width: 80px;
+            height: 1px;
+            background: var(--border);
+            margin: 0 1.5rem;
+            transition: background 0.3s ease;
+        }}
+
+        .wizard-step-connector.completed {{
+            background: var(--primary);
+        }}
+
+        .wizard-content {{
+            min-height: 280px;
+            padding: 0;
+        }}
+
+        .wizard-dual-panel {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }}
+
+        @media (max-width: 768px) {{
+            .wizard-dual-panel {{
+                grid-template-columns: 1fr;
+            }}
+        }}
+
+        .wizard-panel {{
+            background: var(--secondary);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+            position: relative;
+        }}
+
+        .wizard-panel::before {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--primary);
+        }}
+
+        .wizard-panel.sea-panel::before {{
+            background: var(--primary);
+        }}
+
+        .wizard-panel.road-panel::before {{
+            background: var(--primary);
+        }}
+
+        .wizard-panel-title {{
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-bottom: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            letter-spacing: 0.1em;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }}
+
+        .panel-icon {{
+            font-size: 1.5rem;
+        }}
+
+        .wizard-cargo-section {{
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: center;
+        }}
+
+        .cargo-input-row {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--secondary);
+            padding: 1.5rem 2rem;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            min-width: 350px;
+        }}
+
+        .wizard-navigation {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 2rem;
+            border-top: 1px solid var(--border);
+            margin-top: 2rem;
+            background: var(--secondary);
+        }}
+
+        .wizard-navigation .btn-secondary,
+        .wizard-navigation .btn-primary {{
+            min-width: 140px;
+            width: auto !important;
+            flex: 0 0 auto;
+            margin-top: 0;
+            font-size: 0.75rem;
+            letter-spacing: 0.1em;
+        }}
+
+        .wizard-navigation .wizard-compare-btn {{
+            min-width: 180px;
+            width: auto !important;
+        }}
+
+        .btn-secondary {{
+            background: transparent;
+            color: var(--foreground);
+            border: 1px solid var(--border);
+            padding: 0.875rem 1.5rem;
+            border-radius: var(--radius);
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            letter-spacing: 0.1em;
+        }}
+
+        .btn-secondary:hover {{
+            background: var(--foreground);
+            color: var(--background);
+            border-color: var(--foreground);
+        }}
+
+        .btn-small {{
+            padding: 0.625rem 1rem;
+            font-size: 0.7rem;
+        }}
+
+        .wizard-compare-btn {{
+            background: var(--primary);
+            color: var(--primary-foreground);
+        }}
+
+        .wizard-compare-btn:hover:not(:disabled) {{
+            background: var(--primary-dark);
+        }}
+
+        .wizard-cargo-input {{
+            display: flex;
+            justify-content: center;
+            padding: 2rem 0;
+        }}
+
+        .form-hint {{
+            font-size: 0.8rem;
+            color: var(--muted-foreground);
+            margin-top: 0.5rem;
+        }}
+
+        .wizard-divider {{
+            text-align: center;
+            margin: 2rem 0;
+            position: relative;
+        }}
+
+        .wizard-divider::before {{
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--border);
+        }}
+
+        .wizard-divider-text {{
+            background: var(--background);
+            padding: 0 1rem;
+            color: var(--muted-foreground);
+            font-size: 0.875rem;
+            position: relative;
+            z-index: 1;
+        }}
+
+        /* ===== COMPARISON RESULTS STYLES ===== */
+        .comparison-results-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }}
+
+        .card-title-standalone {{
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--foreground);
+            margin: 0;
+            letter-spacing: 0.05em;
+        }}
+
+        .comparison-map-container {{
+            height: 650px;
+        }}
+
+        .comparison-metrics-grid {{
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }}
+
+        @media (max-width: 768px) {{
+            .comparison-metrics-grid {{
+                grid-template-columns: 1fr;
+            }}
+        }}
+
+        .comparison-metric-card {{
+            background: var(--background);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            border: 2px solid var(--border);
+            text-align: center;
+        }}
+
+        .comparison-metric-card.sea {{
+            border-top: 4px solid var(--primary);
+        }}
+
+        .comparison-metric-card.road {{
+            border-top: 4px solid var(--primary);
+        }}
+
+        .comparison-metric-card.summary {{
+            border-top: 4px solid var(--primary);
+            background: var(--secondary);
+        }}
+
+        .comparison-metric-header {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }}
+
+        .comparison-metric-icon {{
+            font-size: 1.5rem;
+        }}
+
+        .comparison-metric-title {{
+            font-weight: 600;
+            color: var(--foreground);
+            font-size: 0.875rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }}
+
+        .comparison-metric-value {{
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--foreground);
+            line-height: 1;
+        }}
+
+        .comparison-metric-card.sea .comparison-metric-value {{
+            color: var(--foreground);
+        }}
+
+        .comparison-metric-card.road .comparison-metric-value {{
+            color: var(--foreground);
+        }}
+
+        .comparison-metric-card.summary .comparison-metric-value {{
+            color: var(--foreground);
+        }}
+
+        .comparison-metric-label {{
+            font-size: 0.875rem;
+            color: var(--muted-foreground);
+            margin-top: 0.5rem;
+        }}
+
+        .comparison-metric-detail {{
+            font-size: 0.8rem;
+            color: var(--muted-foreground);
+            margin-top: 0.5rem;
+        }}
+
+        /* Chart Container */
+        .chart-container {{
+            position: relative;
+            height: 420px;
+            padding: 1.5rem;
+            background: var(--background);
+            border-radius: var(--radius);
+        }}
+
+        /* Insights Styles */
+        .insights-content {{
+            padding: 0.5rem 0;
+        }}
+
+        .insight-item {{
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1.25rem;
+            background: var(--background);
+            border-radius: var(--radius);
+            margin-bottom: 0.75rem;
+            border: 1px solid var(--border);
+        }}
+
+        .insight-item:last-child {{
+            margin-bottom: 0;
+        }}
+
+        .insight-label {{
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            padding: 0.5rem 0.75rem;
+            background: var(--primary);
+            color: var(--primary-foreground);
+            border-radius: var(--radius);
+            flex-shrink: 0;
+            min-width: 50px;
+            text-align: center;
+        }}
+
+        .insight-text {{
+            flex: 1;
+        }}
+
+        .insight-title {{
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--foreground);
+            margin-bottom: 0.5rem;
+        }}
+
+        .insight-description {{
+            font-size: 0.8rem;
+            color: var(--muted-foreground);
+            line-height: 1.5;
+        }}
+
+        .insight-item.positive {{
+            border-left: 3px solid var(--primary);
+        }}
+
+        .insight-item.negative {{
+            border-left: 3px solid var(--primary);
+        }}
+
+        .insight-item.neutral {{
+            border-left: 3px solid var(--muted);
+        }}
+
+        /* Combined Map Legend */
+        .comparison-map-legend {{
+            position: absolute;
+            bottom: 1rem;
+            left: 1rem;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 0.75rem 1rem;
+            border-radius: var(--radius);
+            font-size: 0.8rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            z-index: 10;
+            border: 1px solid var(--border);
+        }}
     </style>
 </head>
 <body>
-        <div class="header">
+    <!-- Navigation Overlay -->
+    <div class="nav-overlay" id="navOverlay">
+        <div class="nav-menu">
+            <a href="#" class="nav-link" onclick="navigateToTab('compare'); toggleMenu(); return false;">Compare Routes</a>
+            <a href="#" class="nav-link" onclick="navigateToTab('mrv'); toggleMenu(); return false;">ETS Calculator</a>
+            <a href="#" class="nav-link" onclick="navigateToTab('distance'); toggleMenu(); return false;">Sea Distance</a>
+            <a href="#" class="nav-link" onclick="navigateToTab('road'); toggleMenu(); return false;">Road Distance</a>
+
+            <div class="nav-section-label">CALCULATORS:</div>
+            <a href="#" class="nav-sub-link" onclick="navigateToTab('compare'); toggleMenu(); return false;">Sea vs Road Comparison</a>
+            <a href="#" class="nav-sub-link" onclick="navigateToTab('mrv'); toggleMenu(); return false;">ETS Cost Calculation</a>
+            <a href="#" class="nav-sub-link" onclick="navigateToTab('distance'); toggleMenu(); return false;">Sea Distance</a>
+            <a href="#" class="nav-sub-link" onclick="navigateToTab('road'); toggleMenu(); return false;">Road Distance</a>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
         <div class="header-content">
-            <h1>⚓ Maritime Distance & ETS Calculator</h1>
-            <p>Calculate shipping distances and EU Emissions Trading System costs</p>
+            <a href="#" class="logo">ets-routes</a>
+            <div class="header-right">
+                <button class="menu-btn" id="menuBtn" onclick="toggleMenu()">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
         </div>
+    </div>
+
+    <!-- Hero Section -->
+    <div class="hero">
+        <div class="hero-content">
+            <h1>Route &<br>ETS Calculator.</h1>
+            <p>Calculate shipping distances and EU Emissions Trading System costs with precision. Compare sea and road transport options.</p>
+            <div class="hero-buttons">
+                <button class="btn-hero-outline" onclick="navigateToTab('compare')">COMPARE ROUTES</button>
+                <button class="btn-hero-filled" onclick="navigateToTab('mrv')">ETS CALCULATOR</button>
+            </div>
         </div>
-        
+    </div>
+
     <div class="container">
         <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('mrv')">💰 ETS Cost Calculation</button>
-            <button class="tab-btn" onclick="switchTab('distance')">🌊 Distance Calculation</button>
-            <button class="tab-btn" onclick="switchTab('road')">🛣️ Road Distance Calculator</button>
+            <button class="tab-btn active" onclick="switchTab('compare')">COMPARE ROUTES</button>
+            <button class="tab-btn" onclick="switchTab('mrv')">ETS COST</button>
+            <button class="tab-btn" onclick="switchTab('distance')">SEA DISTANCE</button>
+            <button class="tab-btn" onclick="switchTab('road')">ROAD DISTANCE</button>
         </div>
         
+        <!-- Compare Routes Tab -->
+        <div id="compare-tab" class="tab-content active">
+            <!-- ETS Cost Comparison Wizard -->
+            <div class="card wizard-container" id="comparison-wizard">
+                <div class="wizard-header">
+                    <h2 class="card-title">SEA VS ROAD COMPARISON</h2>
+                    <p class="card-subtitle">Compare ETS costs between maritime and road transport</p>
+                </div>
+
+                <div class="wizard-body">
+                    <!-- Step Indicator -->
+                    <div class="wizard-steps">
+                        <div class="wizard-step active" data-step="1">
+                            <div class="wizard-step-number">1</div>
+                            <div class="wizard-step-label">VEHICLES & CARGO</div>
+                        </div>
+                        <div class="wizard-step-connector"></div>
+                        <div class="wizard-step" data-step="2">
+                            <div class="wizard-step-number">2</div>
+                            <div class="wizard-step-label">ROUTE</div>
+                        </div>
+                    </div>
+
+                    <!-- Step 1: Vehicle Selection -->
+                    <div class="wizard-content" id="wizard-step-1">
+                        <div class="wizard-dual-panel">
+                            <!-- Sea Vehicle Panel -->
+                            <div class="wizard-panel sea-panel">
+                                <h3 class="wizard-panel-title">SEA TRANSPORT</h3>
+                            <div class="form-group">
+                                <label class="form-label">Vessel Type</label>
+                                <select id="wizard-vessel-type" class="form-input" onchange="updateWizardSeaDropdowns(); updateWizardState();">
+                                    <option value="">-- Select Vessel Type --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Size (dwt)</label>
+                                <select id="wizard-vessel-size" class="form-input" onchange="updateWizardSeaDropdowns(); updateWizardState();" disabled>
+                                    <option value="">-- Select Size --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Fuel Type</label>
+                                <select id="wizard-sea-fuel" class="form-input" onchange="updateWizardState();" disabled>
+                                    <option value="">-- Select Fuel --</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Road Vehicle Panel -->
+                        <div class="wizard-panel road-panel">
+                            <h3 class="wizard-panel-title">ROAD TRANSPORT</h3>
+                            <div class="form-group">
+                                <label class="form-label">Vehicle Mode</label>
+                                <select id="wizard-road-mode" class="form-input" onchange="updateWizardRoadDropdowns(); updateWizardState();">
+                                    <option value="">-- Select Mode --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Load Type</label>
+                                <select id="wizard-road-load-type" class="form-input" onchange="updateWizardRoadDropdowns(); updateWizardState();" disabled>
+                                    <option value="">-- Select Load Type --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Fuel Type</label>
+                                <select id="wizard-road-fuel" class="form-input" onchange="updateWizardState();" disabled>
+                                    <option value="">-- Select Fuel --</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cargo Weight Input -->
+                    <div class="wizard-cargo-section">
+                        <div class="cargo-input-row">
+                            <div class="form-group" style="flex: 1; max-width: 300px; margin: 0;">
+                                <label class="form-label">CARGO WEIGHT (TONNES)</label>
+                                <input type="number" id="wizard-cargo-weight" class="form-input" placeholder="Enter cargo weight" step="0.01" min="0" oninput="updateWizardState()">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Route Selection -->
+                <div class="wizard-content" id="wizard-step-2" style="display: none;">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Origin Location</label>
+                            <div class="address-search-container">
+                                <svg class="address-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                                <input type="text" id="wizard-origin-address" class="address-search-input" placeholder="Search for origin location..." autocomplete="off">
+                                <div class="address-search-spinner" id="wizard-origin-spinner"></div>
+                                <button class="address-search-clear" id="wizard-origin-clear" onclick="clearWizardAddress('wizard-origin')">&#10005;</button>
+                                <div class="address-suggestions" id="wizard-origin-suggestions"></div>
+                            </div>
+                            <input type="hidden" id="wizard-origin-lat">
+                            <input type="hidden" id="wizard-origin-lon">
+                            <div class="coordinates-display" id="wizard-origin-coords">Not selected</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Destination Location</label>
+                            <div class="address-search-container">
+                                <svg class="address-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                                <input type="text" id="wizard-dest-address" class="address-search-input" placeholder="Search for destination location..." autocomplete="off">
+                                <div class="address-search-spinner" id="wizard-dest-spinner"></div>
+                                <button class="address-search-clear" id="wizard-dest-clear" onclick="clearWizardAddress('wizard-dest')">&#10005;</button>
+                                <div class="address-suggestions" id="wizard-dest-suggestions"></div>
+                            </div>
+                            <input type="hidden" id="wizard-dest-lat">
+                            <input type="hidden" id="wizard-dest-lon">
+                            <div class="coordinates-display" id="wizard-dest-coords">Not selected</div>
+                        </div>
+                    </div>
+
+                    <!-- Route preview map -->
+                    <div class="map-container" id="wizard-preview-map-container" style="height: 450px; margin-top: 1rem;">
+                        <div class="map-placeholder" id="wizard-preview-map-placeholder">
+                            Select origin and destination to preview routes
+                        </div>
+                        <div id="wizard-preview-map" style="width: 100%; height: 100%; display: none;"></div>
+                    </div>
+                </div>
+
+                    <!-- Navigation Buttons -->
+                    <div class="wizard-navigation">
+                        <button class="btn-secondary" id="wizard-back-btn" onclick="wizardPrevStep()" style="display: none;">
+                            BACK
+                        </button>
+                        <button class="btn-primary" id="wizard-next-btn" onclick="wizardNextStep()" disabled>
+                            NEXT
+                        </button>
+                        <button class="btn-primary wizard-compare-btn" id="wizard-compare-btn" onclick="runComparison()" style="display: none;" disabled>
+                            RUN COMPARISON
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Comparison Results Section -->
+            <div id="comparison-results" class="results" style="display: none;">
+                <div class="comparison-results-header">
+                    <h2 class="card-title-standalone">COMPARISON RESULTS</h2>
+                    <button class="btn-secondary btn-small" onclick="resetWizard()">NEW COMPARISON</button>
+                </div>
+
+                <!-- Combined Routes Map -->
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <h2 class="card-title">ROUTE COMPARISON MAP</h2>
+                            <p class="card-subtitle">Visual comparison of sea and road transport routes</p>
+                        </div>
+                    </div>
+                    <div class="map-container comparison-map-container" id="comparison-map-container">
+                        <div class="map-placeholder" id="comparison-map-placeholder">Loading routes...</div>
+                        <div id="comparison-map" style="width: 100%; height: 100%; display: none;"></div>
+                    </div>
+                </div>
+
+                <!-- CO2 Comparison Cards -->
+                <div class="comparison-metrics-grid">
+                    <div class="comparison-metric-card sea">
+                        <div class="comparison-metric-header">
+                            <span class="comparison-metric-title">SEA TRANSPORT</span>
+                        </div>
+                        <div class="comparison-metric-value" id="sea-co2-value">--</div>
+                        <div class="comparison-metric-label">TONNES CO2</div>
+                        <div class="comparison-metric-detail" id="sea-distance-detail">-- km</div>
+                    </div>
+
+                    <div class="comparison-metric-card road">
+                        <div class="comparison-metric-header">
+                            <span class="comparison-metric-title">ROAD TRANSPORT</span>
+                        </div>
+                        <div class="comparison-metric-value" id="road-co2-value">--</div>
+                        <div class="comparison-metric-label">TONNES CO2</div>
+                        <div class="comparison-metric-detail" id="road-distance-detail">-- km</div>
+                    </div>
+
+                    <div class="comparison-metric-card summary">
+                        <div class="comparison-metric-header">
+                            <span class="comparison-metric-title">CO2 DIFFERENCE</span>
+                        </div>
+                        <div class="comparison-metric-value" id="co2-savings-value">--</div>
+                        <div class="comparison-metric-label" id="co2-savings-label">TONNES CO2</div>
+                        <div class="comparison-metric-detail" id="co2-savings-percent">--</div>
+                    </div>
+                </div>
+
+                <!-- ETS Cost Chart -->
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <h2 class="card-title">ETS COST PROJECTION (2024-2030)</h2>
+                            <p class="card-subtitle">Annual ETS costs comparison with phase-in schedule</p>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="comparison-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Analysis Insights -->
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <h2 class="card-title">ANALYSIS & INSIGHTS</h2>
+                            <p class="card-subtitle">Key findings from the comparison</p>
+                        </div>
+                    </div>
+                    <div id="comparison-insights" class="insights-content">
+                        <!-- Dynamic insights will be inserted here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- MRV Tab -->
-        <div id="mrv-tab" class="tab-content active">
+        <div id="mrv-tab" class="tab-content">
             <div class="card">
-                <h2 class="card-title">🚚 Transportation Mode</h2>
-                
+                <div class="card-header">
+                    <div class="card-icon transport">🚚</div>
+                    <div>
+                        <h2 class="card-title">Transportation Mode</h2>
+                        <p class="card-subtitle">Choose sea or road transport</p>
+                    </div>
+                </div>
+
                     <div class="form-group">
                     <label class="form-label" for="transport-mode">Select Transportation Mode</label>
                     <select id="transport-mode" class="form-input" onchange="updateTransportFields()">
@@ -1326,7 +2871,13 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             
             <!-- Sea Transport Fields -->
             <div id="sea-fields" class="card" style="display: none;">
-                <h2 class="card-title">🚢 Sea Transport Details</h2>
+                <div class="card-header">
+                    <div class="card-icon sea">🚢</div>
+                    <div>
+                        <h2 class="card-title">Sea Transport Details</h2>
+                        <p class="card-subtitle">Configure vessel type and fuel</p>
+                    </div>
+                </div>
                     
                     <div class="form-group">
                     <label class="form-label" for="vessel-type">Vessel Type</label>
@@ -1352,7 +2903,13 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             
             <!-- Road Transport Fields -->
             <div id="road-fields" class="card" style="display: none;">
-                <h2 class="card-title">🛣️ Road Transport Details</h2>
+                <div class="card-header">
+                    <div class="card-icon road">🛣️</div>
+                    <div>
+                        <h2 class="card-title">Road Transport Details</h2>
+                        <p class="card-subtitle">Configure vehicle and fuel type</p>
+                    </div>
+                </div>
                     
                     <div class="form-group">
                     <label class="form-label" for="road-mode">Vehicle Mode</label>
@@ -1377,7 +2934,13 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             </div>
             
             <div id="cargo-fields" class="card" style="display: none;">
-                <h2 class="card-title">📦 Cargo Information</h2>
+                <div class="card-header">
+                    <div class="card-icon cargo">📦</div>
+                    <div>
+                        <h2 class="card-title">Cargo Information</h2>
+                        <p class="card-subtitle">Enter cargo weight in tonnes</p>
+                    </div>
+                </div>
                 
                 <div class="form-group">
                     <label class="form-label" for="cargo-weight">Cargo Weight (tonnes)</label>
@@ -1385,57 +2948,107 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 </div>
             </div>
             
-            <!-- Sea Transport Route (Ports) -->
+            <!-- Sea Transport Route (Address Search) -->
             <div id="sea-route-fields" class="card" style="display: none;">
-                <h2 class="card-title">📍 Route Information (Sea)</h2>
-                
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label class="form-label" for="mrv-origin-search">Origin Port</label>
-                        <input type="text" id="mrv-origin-search" class="form-input" placeholder="Search for origin port..." autocomplete="off">
-                        <div id="mrv-origin-results" class="search-results"></div>
-                        <div class="coordinates-display" id="mrv-origin-coords">Not selected</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label" for="mrv-dest-search">Destination Port</label>
-                        <input type="text" id="mrv-dest-search" class="form-input" placeholder="Search for destination port..." autocomplete="off">
-                        <div id="mrv-dest-results" class="search-results"></div>
-                        <div class="coordinates-display" id="mrv-dest-coords">Not selected</div>
+                <div class="card-header">
+                    <div class="card-icon route">📍</div>
+                    <div>
+                        <h2 class="card-title">Route Information (Sea)</h2>
+                        <p class="card-subtitle">Search for origin and destination ports</p>
                     </div>
                 </div>
-                
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Origin Location</label>
+                        <div class="address-search-container">
+                            <svg class="address-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                            <input type="text" id="sea-origin-mrv-address" class="address-search-input" placeholder="Search for origin port or city..." autocomplete="off">
+                            <div class="address-search-spinner" id="sea-origin-mrv-spinner"></div>
+                            <button class="address-search-clear" id="sea-origin-mrv-clear" onclick="clearAddressSearch('sea-origin-mrv')">✕</button>
+                            <div class="address-suggestions" id="sea-origin-mrv-suggestions"></div>
+                        </div>
+                        <input type="hidden" id="sea-origin-mrv-lat">
+                        <input type="hidden" id="sea-origin-mrv-lon">
+                        <div class="coordinates-display" id="sea-origin-mrv-coords">Not selected</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Destination Location</label>
+                        <div class="address-search-container">
+                            <svg class="address-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                            <input type="text" id="sea-dest-mrv-address" class="address-search-input" placeholder="Search for destination port or city..." autocomplete="off">
+                            <div class="address-search-spinner" id="sea-dest-mrv-spinner"></div>
+                            <button class="address-search-clear" id="sea-dest-mrv-clear" onclick="clearAddressSearch('sea-dest-mrv')">✕</button>
+                            <div class="address-suggestions" id="sea-dest-mrv-suggestions"></div>
+                        </div>
+                        <input type="hidden" id="sea-dest-mrv-lat">
+                        <input type="hidden" id="sea-dest-mrv-lon">
+                        <div class="coordinates-display" id="sea-dest-mrv-coords">Not selected</div>
+                    </div>
+                </div>
+
+                <!-- Map for MRV Sea Route -->
+                <div class="map-container" id="mrv-sea-map-container">
+                    <div class="map-placeholder" id="mrv-sea-map-placeholder">
+                        Select origin and destination to see route on map
+                    </div>
+                    <div id="mrv-sea-map" style="width: 100%; height: 100%; display: none;"></div>
+                </div>
+
                 <button class="btn-primary" id="mrv-calculate-btn" onclick="calculateMRV()" disabled>
                     💰 Calculate ETS Costs
                 </button>
             </div>
             
-            <!-- Road Transport Route (Coordinates) -->
+            <!-- Road Transport Route (Address Search) -->
             <div id="road-route-fields" class="card" style="display: none;">
-                <h2 class="card-title">📍 Route Information (Road)</h2>
-                
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label class="form-label" for="road-origin-lat-mrv">Origin Latitude</label>
-                        <input type="number" id="road-origin-lat-mrv" class="form-input" placeholder="e.g., 41.0082" step="any" oninput="updateMRVCalculateButton()">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label" for="road-origin-lon-mrv">Origin Longitude</label>
-                        <input type="number" id="road-origin-lon-mrv" class="form-input" placeholder="e.g., 28.9784" step="any" oninput="updateMRVCalculateButton()">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label" for="road-dest-lat-mrv">Destination Latitude</label>
-                        <input type="number" id="road-dest-lat-mrv" class="form-input" placeholder="e.g., 48.8566" step="any" oninput="updateMRVCalculateButton()">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label" for="road-dest-lon-mrv">Destination Longitude</label>
-                        <input type="number" id="road-dest-lon-mrv" class="form-input" placeholder="e.g., 2.3522" step="any" oninput="updateMRVCalculateButton()">
+                <div class="card-header">
+                    <div class="card-icon route">📍</div>
+                    <div>
+                        <h2 class="card-title">Route Information (Road)</h2>
+                        <p class="card-subtitle">Search for origin and destination addresses</p>
                     </div>
                 </div>
-                
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Origin Address</label>
+                        <div class="address-search-container">
+                            <svg class="address-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                            <input type="text" id="road-origin-mrv-address" class="address-search-input" placeholder="Search for origin address..." autocomplete="off">
+                            <div class="address-search-spinner" id="road-origin-mrv-spinner"></div>
+                            <button class="address-search-clear" id="road-origin-mrv-clear" onclick="clearAddressSearch('road-origin-mrv')">✕</button>
+                            <div class="address-suggestions" id="road-origin-mrv-suggestions"></div>
+                        </div>
+                        <input type="hidden" id="road-origin-mrv-lat">
+                        <input type="hidden" id="road-origin-mrv-lon">
+                        <div class="coordinates-display" id="road-origin-mrv-coords">Not selected</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Destination Address</label>
+                        <div class="address-search-container">
+                            <svg class="address-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                            <input type="text" id="road-dest-mrv-address" class="address-search-input" placeholder="Search for destination address..." autocomplete="off">
+                            <div class="address-search-spinner" id="road-dest-mrv-spinner"></div>
+                            <button class="address-search-clear" id="road-dest-mrv-clear" onclick="clearAddressSearch('road-dest-mrv')">✕</button>
+                            <div class="address-suggestions" id="road-dest-mrv-suggestions"></div>
+                        </div>
+                        <input type="hidden" id="road-dest-mrv-lat">
+                        <input type="hidden" id="road-dest-mrv-lon">
+                        <div class="coordinates-display" id="road-dest-mrv-coords">Not selected</div>
+                    </div>
+                </div>
+
+                <!-- Map for MRV Road Route -->
+                <div class="map-container" id="mrv-road-map-container">
+                    <div class="map-placeholder" id="mrv-road-map-placeholder">
+                        Select origin and destination to see route on map
+                    </div>
+                    <div id="mrv-road-map" style="width: 100%; height: 100%; display: none;"></div>
+                </div>
+
                 <button class="btn-primary" id="mrv-calculate-btn-road" onclick="calculateMRV()" disabled>
                     💰 Calculate ETS Costs
                 </button>
@@ -1449,7 +3062,13 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         <!-- Distance Tab -->
         <div id="distance-tab" class="tab-content">
             <div class="card">
-                <h2 class="card-title">📍 Route Information</h2>
+                <div class="card-header">
+                    <div class="card-icon sea">🌊</div>
+                    <div>
+                        <h2 class="card-title">Maritime Route Information</h2>
+                        <p class="card-subtitle">Search for origin and destination ports</p>
+                    </div>
+                </div>
                 
                 <div class="form-grid">
                     <div class="form-group">
@@ -1480,35 +3099,57 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         <!-- Road Distance Tab -->
         <div id="road-tab" class="tab-content">
             <div class="card">
-                <h2 class="card-title">🛣️ Road Route Information</h2>
-                
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label class="form-label" for="road-origin-lat">Origin Latitude</label>
-                        <input type="number" id="road-origin-lat" class="form-input" placeholder="e.g., 41.0082" step="any">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label" for="road-origin-lon">Origin Longitude</label>
-                        <input type="number" id="road-origin-lon" class="form-input" placeholder="e.g., 28.9784" step="any">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label" for="road-dest-lat">Destination Latitude</label>
-                        <input type="number" id="road-dest-lat" class="form-input" placeholder="e.g., 40.7128" step="any">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label" for="road-dest-lon">Destination Longitude</label>
-                        <input type="number" id="road-dest-lon" class="form-input" placeholder="e.g., -74.0060" step="any">
+                <div class="card-header">
+                    <div class="card-icon road">🛣️</div>
+                    <div>
+                        <h2 class="card-title">Road Route Information</h2>
+                        <p class="card-subtitle">Search for origin and destination addresses</p>
                     </div>
                 </div>
-                
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Origin Address</label>
+                        <div class="address-search-container">
+                            <svg class="address-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                            <input type="text" id="road-origin-address" class="address-search-input" placeholder="Search for origin address..." autocomplete="off">
+                            <div class="address-search-spinner" id="road-origin-spinner"></div>
+                            <button class="address-search-clear" id="road-origin-clear" onclick="clearAddressSearch('road-origin')">✕</button>
+                            <div class="address-suggestions" id="road-origin-suggestions"></div>
+                        </div>
+                        <input type="hidden" id="road-origin-lat">
+                        <input type="hidden" id="road-origin-lon">
+                        <div class="coordinates-display" id="road-origin-coords">Not selected</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Destination Address</label>
+                        <div class="address-search-container">
+                            <svg class="address-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                            <input type="text" id="road-dest-address" class="address-search-input" placeholder="Search for destination address..." autocomplete="off">
+                            <div class="address-search-spinner" id="road-dest-spinner"></div>
+                            <button class="address-search-clear" id="road-dest-clear" onclick="clearAddressSearch('road-dest')">✕</button>
+                            <div class="address-suggestions" id="road-dest-suggestions"></div>
+                        </div>
+                        <input type="hidden" id="road-dest-lat">
+                        <input type="hidden" id="road-dest-lon">
+                        <div class="coordinates-display" id="road-dest-coords">Not selected</div>
+                    </div>
+                </div>
+
+                <!-- Map for Road Distance -->
+                <div class="map-container" id="road-map-container">
+                    <div class="map-placeholder" id="road-map-placeholder">
+                        Select origin and destination to see route on map
+                    </div>
+                    <div id="road-map" style="width: 100%; height: 100%; display: none;"></div>
+                </div>
+
                 <button class="btn-primary" id="road-calculate-btn" onclick="calculateRoadDistance()" disabled>
                     🛣️ Calculate Road Distance
                 </button>
             </div>
-            
+
             <div id="road-results" class="results">
                 <div id="road-results-content"></div>
             </div>
@@ -1521,7 +3162,65 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
         let selectedMRVOrigin = null;
         let selectedMRVDestination = null;
         let transportOptions = null;
-        
+
+        // Navigation menu functions
+        function toggleMenu() {{
+            const menuBtn = document.getElementById('menuBtn');
+            const navOverlay = document.getElementById('navOverlay');
+            menuBtn.classList.toggle('active');
+            navOverlay.classList.toggle('active');
+            if (navOverlay.classList.contains('active')) {{
+                document.body.style.overflow = 'hidden';
+            }} else {{
+                document.body.style.overflow = '';
+            }}
+        }}
+
+        function navigateToTab(tabName) {{
+            switchTab(tabName);
+            toggleMenu();
+            setTimeout(() => {{
+                document.querySelector('.container').scrollIntoView({{ behavior: 'smooth' }});
+            }}, 100);
+        }}
+
+        // Helper function to show/update map legend
+        function updateMapLegend(mapContainerId, routeColor, routeLabel) {{
+            const container = document.getElementById(mapContainerId);
+            if (!container) return;
+
+            // Remove existing legend if any
+            const existingLegend = container.querySelector('.map-legend');
+            if (existingLegend) existingLegend.remove();
+
+            // Create legend HTML
+            const legend = document.createElement('div');
+            legend.className = 'map-legend';
+            legend.innerHTML = `
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:#22c55e"></div>
+                    <span>Origin</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:#ef4444"></div>
+                    <span>Destination</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-line" style="background:${{routeColor}}"></div>
+                    <span>${{routeLabel}}</span>
+                </div>
+            `;
+            container.appendChild(legend);
+        }}
+
+        // Helper function to remove map legend
+        function removeMapLegend(mapContainerId) {{
+            const container = document.getElementById(mapContainerId);
+            if (!container) return;
+            const legend = container.querySelector('.map-legend');
+            if (legend) legend.remove();
+        }}
+
         // Load transport options when DOM is ready
         if (document.readyState === 'loading') {{
             document.addEventListener('DOMContentLoaded', loadTransportOptions);
@@ -1595,8 +3294,11 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             document.getElementById('sea-fuel').disabled = true;
             document.getElementById('road-load-type').disabled = true;
             document.getElementById('road-fuel').disabled = true;
+
+            // Initialize wizard dropdowns
+            initWizardDropdowns();
         }}
-        
+
         function updateSeaDropdowns() {{
             const vesselTypeSelect = document.getElementById('vessel-type');
             const vesselSizeSelect = document.getElementById('vessel-size');
@@ -1779,27 +3481,9 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
                 updateCalculateButton();
             }});
         }});
-        
-        document.getElementById('mrv-origin-search').addEventListener('input', function(e) {{
-            searchPorts(e.target.value, 'mrv-origin-results', function(port) {{
-                selectedMRVOrigin = port;
-                document.getElementById('mrv-origin-coords').textContent = `${{port.lat.toFixed(4)}}, ${{port.lon.toFixed(4)}}`;
-                document.getElementById('mrv-origin-search').value = port.name;
-                document.getElementById('mrv-origin-results').style.display = 'none';
-                updateMRVCalculateButton();
-            }});
-        }});
-        
-        document.getElementById('mrv-dest-search').addEventListener('input', function(e) {{
-            searchPorts(e.target.value, 'mrv-dest-results', function(port) {{
-                selectedMRVDestination = port;
-                document.getElementById('mrv-dest-coords').textContent = `${{port.lat.toFixed(4)}}, ${{port.lon.toFixed(4)}}`;
-                document.getElementById('mrv-dest-search').value = port.name;
-                document.getElementById('mrv-dest-results').style.display = 'none';
-                updateMRVCalculateButton();
-            }});
-        }});
-        
+
+        // Note: MRV port search replaced with address search - see initAddressSearch calls in DOMContentLoaded
+
         // Road distance coordinate inputs
         document.getElementById('road-origin-lat').addEventListener('input', updateRoadCalculateButton);
         document.getElementById('road-origin-lon').addEventListener('input', updateRoadCalculateButton);
@@ -1843,24 +3527,30 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             const cargoWeight = parseFloat(document.getElementById('cargo-weight').value) || 0;
             const seaBtn = document.getElementById('mrv-calculate-btn');
             const roadBtn = document.getElementById('mrv-calculate-btn-road');
-            
+
             let isValid = false;
-            
+
             if (transportMode === 'sea') {{
                 const vesselType = document.getElementById('vessel-type').value;
                 const vesselSize = document.getElementById('vessel-size').value;
                 const seaFuel = document.getElementById('sea-fuel').value;
-                isValid = selectedMRVOrigin && selectedMRVDestination && vesselType && vesselSize && seaFuel && cargoWeight > 0;
+                const seaOriginLat = document.getElementById('sea-origin-mrv-lat').value;
+                const seaOriginLon = document.getElementById('sea-origin-mrv-lon').value;
+                const seaDestLat = document.getElementById('sea-dest-mrv-lat').value;
+                const seaDestLon = document.getElementById('sea-dest-mrv-lon').value;
+
+                isValid = seaOriginLat && seaOriginLon && seaDestLat && seaDestLon &&
+                         vesselType && vesselSize && seaFuel && cargoWeight > 0;
                 if (seaBtn) seaBtn.disabled = !isValid;
             }} else if (transportMode === 'road') {{
                 const roadMode = document.getElementById('road-mode').value;
                 const loadType = document.getElementById('road-load-type').value;
                 const roadFuel = document.getElementById('road-fuel').value;
-                const originLat = parseFloat(document.getElementById('road-origin-lat-mrv').value);
-                const originLon = parseFloat(document.getElementById('road-origin-lon-mrv').value);
-                const destLat = parseFloat(document.getElementById('road-dest-lat-mrv').value);
-                const destLon = parseFloat(document.getElementById('road-dest-lon-mrv').value);
-                
+                const originLat = parseFloat(document.getElementById('road-origin-mrv-lat').value);
+                const originLon = parseFloat(document.getElementById('road-origin-mrv-lon').value);
+                const destLat = parseFloat(document.getElementById('road-dest-mrv-lat').value);
+                const destLon = parseFloat(document.getElementById('road-dest-mrv-lon').value);
+
                 isValid = roadMode && loadType && roadFuel && cargoWeight > 0 &&
                          !isNaN(originLat) && !isNaN(originLon) && !isNaN(destLat) && !isNaN(destLon);
                 if (roadBtn) roadBtn.disabled = !isValid;
@@ -1922,7 +3612,7 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             if (data.distance.success) {{
             html += `
                     <div class="result-card primary">
-                        <div class="result-header">🚢 Maritime Distance</div>
+                        <div class="result-header">SEA DISTANCE</div>
                         <div class="result-value">${{data.distance.distance_nm.toFixed(1)}} <span style="font-size: 1.5rem; color: #64748b;">nm</span></div>
                         <div class="result-subtitle">${{data.distance.distance_km.toFixed(1)}} kilometers</div>
                         <div class="result-meta">Route complexity: ${{data.distance.route_complexity}} waypoints</div>
@@ -1978,22 +3668,27 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             let url = `/api/mrv?transport_mode=${{transportMode}}&cargo_weight=${{cargoWeight}}`;
             
             if (transportMode === 'sea') {{
-                if (!selectedMRVOrigin || !selectedMRVDestination) return;
-                
+                const seaOriginLat = parseFloat(document.getElementById('sea-origin-mrv-lat').value);
+                const seaOriginLon = parseFloat(document.getElementById('sea-origin-mrv-lon').value);
+                const seaDestLat = parseFloat(document.getElementById('sea-dest-mrv-lat').value);
+                const seaDestLon = parseFloat(document.getElementById('sea-dest-mrv-lon').value);
+
+                if (isNaN(seaOriginLat) || isNaN(seaOriginLon) || isNaN(seaDestLat) || isNaN(seaDestLon)) return;
+
                 const vesselType = document.getElementById('vessel-type').value;
                 const vesselSize = document.getElementById('vessel-size').value;
                 const seaFuel = document.getElementById('sea-fuel').value;
-                
-                url += `&origin_lat=${{selectedMRVOrigin.lat}}&origin_lon=${{selectedMRVOrigin.lon}}&dest_lat=${{selectedMRVDestination.lat}}&dest_lon=${{selectedMRVDestination.lon}}`;
+
+                url += `&origin_lat=${{seaOriginLat}}&origin_lon=${{seaOriginLon}}&dest_lat=${{seaDestLat}}&dest_lon=${{seaDestLon}}`;
                 url += `&vessel_type=${{encodeURIComponent(vesselType)}}&size=${{encodeURIComponent(vesselSize)}}&fuel=${{encodeURIComponent(seaFuel)}}`;
             }} else if (transportMode === 'road') {{
                 const roadMode = document.getElementById('road-mode').value;
                 const loadType = document.getElementById('road-load-type').value;
                 const roadFuel = document.getElementById('road-fuel').value;
-                const originLat = parseFloat(document.getElementById('road-origin-lat-mrv').value);
-                const originLon = parseFloat(document.getElementById('road-origin-lon-mrv').value);
-                const destLat = parseFloat(document.getElementById('road-dest-lat-mrv').value);
-                const destLon = parseFloat(document.getElementById('road-dest-lon-mrv').value);
+                const originLat = parseFloat(document.getElementById('road-origin-mrv-lat').value);
+                const originLon = parseFloat(document.getElementById('road-origin-mrv-lon').value);
+                const destLat = parseFloat(document.getElementById('road-dest-mrv-lat').value);
+                const destLon = parseFloat(document.getElementById('road-dest-mrv-lon').value);
                 
                 if (isNaN(originLat) || isNaN(originLon) || isNaN(destLat) || isNaN(destLon)) return;
                 
@@ -2208,6 +3903,1698 @@ class CalculatorHandler(http.server.SimpleHTTPRequestHandler):
             
             contentDiv.innerHTML = html;
         }}
+
+        // ===== ADDRESS SEARCH AND MAP FUNCTIONALITY =====
+
+        const MAPBOX_TOKEN = 'pk.eyJ1IjoiZXJlbm96Y2V0aW4iLCJhIjoiY21qNzJ4aGRxMDBqdDNjc2VsazlkeWRodiJ9.ppxM8hsfWBKo5nuAkuRmFA';
+        let addressSearchDebounceTimers = {{}};
+        let addressSearchHighlightedIndex = {{}};
+        let roadMap = null;
+        let mrvRoadMap = null;
+        let roadMarkers = [];
+        let mrvRoadMarkers = [];
+
+        // Initialize address search functionality
+        function initAddressSearch(prefix, onSelect) {{
+            const input = document.getElementById(`${{prefix}}-address`);
+            const spinner = document.getElementById(`${{prefix}}-spinner`);
+            const clearBtn = document.getElementById(`${{prefix}}-clear`);
+            const suggestions = document.getElementById(`${{prefix}}-suggestions`);
+
+            console.log(`initAddressSearch: prefix=${{prefix}}, input=`, input);
+
+            if (!input) {{
+                console.error(`initAddressSearch: Input not found for prefix: ${{prefix}}`);
+                return;
+            }}
+
+            addressSearchHighlightedIndex[prefix] = -1;
+
+            input.addEventListener('input', function(e) {{
+                const query = e.target.value;
+
+                // Show/hide clear button
+                clearBtn.classList.toggle('show', query.length > 0);
+
+                // Debounce search
+                if (addressSearchDebounceTimers[prefix]) {{
+                    clearTimeout(addressSearchDebounceTimers[prefix]);
+                }}
+
+                if (query.length < 2) {{
+                    suggestions.classList.remove('show');
+                    return;
+                }}
+
+                addressSearchDebounceTimers[prefix] = setTimeout(() => {{
+                    searchAddresses(prefix, query);
+                }}, 300);
+            }});
+
+            input.addEventListener('keydown', function(e) {{
+                const items = suggestions.querySelectorAll('.address-suggestion');
+                if (!items.length) return;
+
+                if (e.key === 'ArrowDown') {{
+                    e.preventDefault();
+                    addressSearchHighlightedIndex[prefix] = Math.min(addressSearchHighlightedIndex[prefix] + 1, items.length - 1);
+                    updateHighlight(prefix, items);
+                }} else if (e.key === 'ArrowUp') {{
+                    e.preventDefault();
+                    addressSearchHighlightedIndex[prefix] = Math.max(addressSearchHighlightedIndex[prefix] - 1, 0);
+                    updateHighlight(prefix, items);
+                }} else if (e.key === 'Enter') {{
+                    e.preventDefault();
+                    if (addressSearchHighlightedIndex[prefix] >= 0 && items[addressSearchHighlightedIndex[prefix]]) {{
+                        items[addressSearchHighlightedIndex[prefix]].click();
+                    }}
+                }} else if (e.key === 'Escape') {{
+                    suggestions.classList.remove('show');
+                }}
+            }});
+
+            input.addEventListener('focus', function() {{
+                if (suggestions.children.length > 0) {{
+                    suggestions.classList.add('show');
+                }}
+            }});
+
+            // Click outside to close
+            document.addEventListener('click', function(e) {{
+                if (!input.contains(e.target) && !suggestions.contains(e.target)) {{
+                    suggestions.classList.remove('show');
+                }}
+            }});
+        }}
+
+        function updateHighlight(prefix, items) {{
+            items.forEach((item, i) => {{
+                item.classList.toggle('highlighted', i === addressSearchHighlightedIndex[prefix]);
+            }});
+        }}
+
+        function searchAddresses(prefix, query) {{
+            const spinner = document.getElementById(`${{prefix}}-spinner`);
+            const suggestions = document.getElementById(`${{prefix}}-suggestions`);
+
+            console.log(`searchAddresses: prefix=${{prefix}}, query=${{query}}`);
+            spinner.classList.add('show');
+
+            fetch(`/api/geocode?q=${{encodeURIComponent(query)}}&mode=search`)
+                .then(response => {{
+                    console.log('Geocode API response status:', response.status);
+                    return response.json();
+                }})
+                .then(data => {{
+                    console.log('Geocode API data:', data);
+                    spinner.classList.remove('show');
+                    suggestions.innerHTML = '';
+                    addressSearchHighlightedIndex[prefix] = -1;
+
+                    if (data.success && data.data && data.data.length > 0) {{
+                        data.data.forEach((result, index) => {{
+                            const div = document.createElement('div');
+                            div.className = 'address-suggestion';
+                            div.innerHTML = `
+                                <svg class="address-suggestion-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                                <div class="address-suggestion-content">
+                                    <div class="address-suggestion-text">${{result.text}}</div>
+                                    ${{result.context ? `<div class="address-suggestion-context">${{result.context}}</div>` : ''}}
+                                </div>
+                            `;
+                            div.onclick = () => selectAddress(prefix, result);
+                            suggestions.appendChild(div);
+                        }});
+                        suggestions.classList.add('show');
+                    }} else {{
+                        suggestions.classList.remove('show');
+                    }}
+                }})
+                .catch(error => {{
+                    console.error('Address search error:', error);
+                    spinner.classList.remove('show');
+                }});
+        }}
+
+        function selectAddress(prefix, result) {{
+            const input = document.getElementById(`${{prefix}}-address`);
+            const latInput = document.getElementById(`${{prefix}}-lat`);
+            const lonInput = document.getElementById(`${{prefix}}-lon`);
+            const coordsDisplay = document.getElementById(`${{prefix}}-coords`);
+            const suggestions = document.getElementById(`${{prefix}}-suggestions`);
+            const clearBtn = document.getElementById(`${{prefix}}-clear`);
+
+            input.value = result.placeName;
+            latInput.value = result.coordinates.lat;
+            lonInput.value = result.coordinates.lng;
+
+            // Show success state with styled location indicator
+            coordsDisplay.innerHTML = `
+                <div class="location-selected">
+                    <svg class="location-selected-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                    <div class="location-selected-content">
+                        <div class="location-selected-title">Location selected</div>
+                        <div class="location-selected-coords">${{result.coordinates.lat.toFixed(6)}}, ${{result.coordinates.lng.toFixed(6)}}</div>
+                    </div>
+                </div>
+            `;
+            coordsDisplay.classList.remove('coordinates-display');
+
+            suggestions.classList.remove('show');
+            clearBtn.classList.add('show');
+
+            // Update calculate buttons and maps
+            if (prefix.includes('mrv')) {{
+                updateMRVCalculateButton();
+                if (prefix.includes('sea')) {{
+                    updateMrvSeaMap();
+                }} else {{
+                    updateMrvRoadMap();
+                }}
+            }} else {{
+                updateRoadCalculateButton();
+                updateRoadMap();
+            }}
+        }}
+
+        function clearAddressSearch(prefix) {{
+            const input = document.getElementById(`${{prefix}}-address`);
+            const latInput = document.getElementById(`${{prefix}}-lat`);
+            const lonInput = document.getElementById(`${{prefix}}-lon`);
+            const coordsDisplay = document.getElementById(`${{prefix}}-coords`);
+            const clearBtn = document.getElementById(`${{prefix}}-clear`);
+            const suggestions = document.getElementById(`${{prefix}}-suggestions`);
+
+            if (input) input.value = '';
+            if (latInput) latInput.value = '';
+            if (lonInput) lonInput.value = '';
+            if (coordsDisplay) {{
+                coordsDisplay.innerHTML = 'Not selected';
+                coordsDisplay.classList.add('coordinates-display');
+            }}
+            if (clearBtn) clearBtn.classList.remove('show');
+            if (suggestions) suggestions.classList.remove('show');
+
+            // Update calculate buttons and maps
+            if (prefix.includes('mrv')) {{
+                updateMRVCalculateButton();
+                if (prefix.includes('sea')) {{
+                    updateMrvSeaMap();
+                }} else {{
+                    updateMrvRoadMap();
+                }}
+            }} else {{
+                updateRoadCalculateButton();
+                updateRoadMap();
+            }}
+        }}
+
+        // Initialize maps
+        function initMaps() {{
+            if (typeof mapboxgl === 'undefined') {{
+                console.error('Mapbox GL JS not loaded');
+                return;
+            }}
+            mapboxgl.accessToken = MAPBOX_TOKEN;
+        }}
+
+        function updateRoadMap() {{
+            const originLat = parseFloat(document.getElementById('road-origin-lat').value);
+            const originLon = parseFloat(document.getElementById('road-origin-lon').value);
+            const destLat = parseFloat(document.getElementById('road-dest-lat').value);
+            const destLon = parseFloat(document.getElementById('road-dest-lon').value);
+
+            const mapDiv = document.getElementById('road-map');
+            const placeholder = document.getElementById('road-map-placeholder');
+
+            if (isNaN(originLat) && isNaN(destLat)) {{
+                mapDiv.style.display = 'none';
+                placeholder.style.display = 'flex';
+                return;
+            }}
+
+            mapDiv.style.display = 'block';
+            placeholder.style.display = 'none';
+
+            if (!roadMap) {{
+                roadMap = new mapboxgl.Map({{
+                    container: 'road-map',
+                    style: 'mapbox://styles/mapbox/light-v11',
+                    center: [0, 30],
+                    zoom: 2
+                }});
+                roadMap.addControl(new mapboxgl.NavigationControl());
+            }}
+
+            // Clear old markers
+            roadMarkers.forEach(m => m.remove());
+            roadMarkers = [];
+
+            const bounds = new mapboxgl.LngLatBounds();
+            let hasPoints = false;
+
+            if (!isNaN(originLat) && !isNaN(originLon)) {{
+                const marker = new mapboxgl.Marker({{ color: '#22c55e' }})
+                    .setLngLat([originLon, originLat])
+                    .setPopup(new mapboxgl.Popup().setHTML('<div class="marker-label">Origin</div><div class="marker-coords">' + originLat.toFixed(4) + ', ' + originLon.toFixed(4) + '</div>'))
+                    .addTo(roadMap);
+                roadMarkers.push(marker);
+                bounds.extend([originLon, originLat]);
+                hasPoints = true;
+            }}
+
+            if (!isNaN(destLat) && !isNaN(destLon)) {{
+                const marker = new mapboxgl.Marker({{ color: '#ef4444' }})
+                    .setLngLat([destLon, destLat])
+                    .setPopup(new mapboxgl.Popup().setHTML('<div class="marker-label">Destination</div><div class="marker-coords">' + destLat.toFixed(4) + ', ' + destLon.toFixed(4) + '</div>'))
+                    .addTo(roadMap);
+                roadMarkers.push(marker);
+                bounds.extend([destLon, destLat]);
+                hasPoints = true;
+            }}
+
+            // Fetch and draw actual road route
+            if (!isNaN(originLat) && !isNaN(originLon) && !isNaN(destLat) && !isNaN(destLon)) {{
+                placeholder.textContent = 'Loading road route...';
+                placeholder.style.display = 'flex';
+
+                fetch(`/api/route-geometry?origin_lat=${{originLat}}&origin_lon=${{originLon}}&dest_lat=${{destLat}}&dest_lon=${{destLon}}&mode=road`)
+                    .then(response => response.json())
+                    .then(data => {{
+                        placeholder.style.display = 'none';
+                        if (data.success && data.coordinates && data.coordinates.length > 0) {{
+                            const routeData = {{
+                                'type': 'Feature',
+                                'properties': {{}},
+                                'geometry': {{
+                                    'type': 'LineString',
+                                    'coordinates': data.coordinates
+                                }}
+                            }};
+
+                            // Extend bounds to include route
+                            data.coordinates.forEach(coord => bounds.extend(coord));
+
+                            if (roadMap.isStyleLoaded()) {{
+                                try {{
+                                    if (roadMap.getSource('route')) {{
+                                        roadMap.getSource('route').setData(routeData);
+                                    }} else {{
+                                        roadMap.addSource('route', {{ 'type': 'geojson', 'data': routeData }});
+                                        roadMap.addLayer({{
+                                            'id': 'route',
+                                            'type': 'line',
+                                            'source': 'route',
+                                            'layout': {{ 'line-join': 'round', 'line-cap': 'round' }},
+                                            'paint': {{ 'line-color': '#f97316', 'line-width': 4, 'line-opacity': 0.8 }}
+                                        }});
+                                    }}
+                                    roadMap.fitBounds(bounds, {{ padding: 60, maxZoom: 12 }});
+                                }} catch (e) {{
+                                    console.log('Road route layer error:', e);
+                                }}
+                            }} else {{
+                                roadMap.on('load', function() {{
+                                    roadMap.addSource('route', {{ 'type': 'geojson', 'data': routeData }});
+                                    roadMap.addLayer({{
+                                        'id': 'route',
+                                        'type': 'line',
+                                        'source': 'route',
+                                        'layout': {{ 'line-join': 'round', 'line-cap': 'round' }},
+                                        'paint': {{ 'line-color': '#f97316', 'line-width': 4, 'line-opacity': 0.8 }}
+                                    }});
+                                    roadMap.fitBounds(bounds, {{ padding: 60, maxZoom: 12 }});
+                                }});
+                            }}
+                            console.log('Road route loaded with ' + data.coordinates.length + ' waypoints');
+                            // Show map legend
+                            updateMapLegend('road-map', '#f97316', 'Road Route');
+                        }}
+                    }})
+                    .catch(err => {{
+                        console.error('Road route fetch error:', err);
+                        placeholder.style.display = 'none';
+                    }});
+            }} else {{
+                // Remove legend if no route
+                removeMapLegend('road-map');
+            }}
+
+            if (hasPoints) {{
+                roadMap.fitBounds(bounds, {{ padding: 60, maxZoom: 12 }});
+            }}
+        }}
+
+        function updateMrvRoadMap() {{
+            const originLat = parseFloat(document.getElementById('road-origin-mrv-lat').value);
+            const originLon = parseFloat(document.getElementById('road-origin-mrv-lon').value);
+            const destLat = parseFloat(document.getElementById('road-dest-mrv-lat').value);
+            const destLon = parseFloat(document.getElementById('road-dest-mrv-lon').value);
+
+            const mapDiv = document.getElementById('mrv-road-map');
+            const placeholder = document.getElementById('mrv-road-map-placeholder');
+
+            if (isNaN(originLat) && isNaN(destLat)) {{
+                mapDiv.style.display = 'none';
+                placeholder.style.display = 'flex';
+                return;
+            }}
+
+            mapDiv.style.display = 'block';
+            placeholder.style.display = 'none';
+
+            if (!mrvRoadMap) {{
+                mrvRoadMap = new mapboxgl.Map({{
+                    container: 'mrv-road-map',
+                    style: 'mapbox://styles/mapbox/light-v11',
+                    center: [0, 30],
+                    zoom: 2
+                }});
+                mrvRoadMap.addControl(new mapboxgl.NavigationControl());
+            }}
+
+            // Clear old markers
+            mrvRoadMarkers.forEach(m => m.remove());
+            mrvRoadMarkers = [];
+
+            const bounds = new mapboxgl.LngLatBounds();
+            let hasPoints = false;
+
+            if (!isNaN(originLat) && !isNaN(originLon)) {{
+                const marker = new mapboxgl.Marker({{ color: '#22c55e' }})
+                    .setLngLat([originLon, originLat])
+                    .setPopup(new mapboxgl.Popup().setHTML('<div class="marker-label">Origin</div><div class="marker-coords">' + originLat.toFixed(4) + ', ' + originLon.toFixed(4) + '</div>'))
+                    .addTo(mrvRoadMap);
+                mrvRoadMarkers.push(marker);
+                bounds.extend([originLon, originLat]);
+                hasPoints = true;
+            }}
+
+            if (!isNaN(destLat) && !isNaN(destLon)) {{
+                const marker = new mapboxgl.Marker({{ color: '#ef4444' }})
+                    .setLngLat([destLon, destLat])
+                    .setPopup(new mapboxgl.Popup().setHTML('<div class="marker-label">Destination</div><div class="marker-coords">' + destLat.toFixed(4) + ', ' + destLon.toFixed(4) + '</div>'))
+                    .addTo(mrvRoadMap);
+                mrvRoadMarkers.push(marker);
+                bounds.extend([destLon, destLat]);
+                hasPoints = true;
+            }}
+
+            // Fetch and draw actual road route
+            if (!isNaN(originLat) && !isNaN(originLon) && !isNaN(destLat) && !isNaN(destLon)) {{
+                placeholder.textContent = 'Loading road route...';
+                placeholder.style.display = 'flex';
+
+                fetch(`/api/route-geometry?origin_lat=${{originLat}}&origin_lon=${{originLon}}&dest_lat=${{destLat}}&dest_lon=${{destLon}}&mode=road`)
+                    .then(response => response.json())
+                    .then(data => {{
+                        placeholder.style.display = 'none';
+                        if (data.success && data.coordinates && data.coordinates.length > 0) {{
+                            const routeData = {{
+                                'type': 'Feature',
+                                'properties': {{}},
+                                'geometry': {{
+                                    'type': 'LineString',
+                                    'coordinates': data.coordinates
+                                }}
+                            }};
+
+                            // Extend bounds to include route
+                            data.coordinates.forEach(coord => bounds.extend(coord));
+
+                            if (mrvRoadMap.isStyleLoaded()) {{
+                                try {{
+                                    if (mrvRoadMap.getSource('road-route')) {{
+                                        mrvRoadMap.getSource('road-route').setData(routeData);
+                                    }} else {{
+                                        mrvRoadMap.addSource('road-route', {{ 'type': 'geojson', 'data': routeData }});
+                                        mrvRoadMap.addLayer({{
+                                            'id': 'road-route',
+                                            'type': 'line',
+                                            'source': 'road-route',
+                                            'layout': {{ 'line-join': 'round', 'line-cap': 'round' }},
+                                            'paint': {{ 'line-color': '#f97316', 'line-width': 4, 'line-opacity': 0.8 }}
+                                        }});
+                                    }}
+                                    mrvRoadMap.fitBounds(bounds, {{ padding: 60, maxZoom: 12 }});
+                                }} catch (e) {{
+                                    console.log('Road route layer error:', e);
+                                }}
+                            }} else {{
+                                mrvRoadMap.on('load', function() {{
+                                    mrvRoadMap.addSource('road-route', {{ 'type': 'geojson', 'data': routeData }});
+                                    mrvRoadMap.addLayer({{
+                                        'id': 'road-route',
+                                        'type': 'line',
+                                        'source': 'road-route',
+                                        'layout': {{ 'line-join': 'round', 'line-cap': 'round' }},
+                                        'paint': {{ 'line-color': '#f97316', 'line-width': 4, 'line-opacity': 0.8 }}
+                                    }});
+                                    mrvRoadMap.fitBounds(bounds, {{ padding: 60, maxZoom: 12 }});
+                                }});
+                            }}
+                            console.log('Road route loaded with ' + data.coordinates.length + ' waypoints');
+                            // Show map legend
+                            updateMapLegend('mrv-road-map', '#f97316', 'Road Route');
+                        }}
+                    }})
+                    .catch(err => {{
+                        console.error('Road route fetch error:', err);
+                        placeholder.style.display = 'none';
+                    }});
+            }} else {{
+                // Remove legend if no route
+                removeMapLegend('mrv-road-map');
+            }}
+
+            if (hasPoints) {{
+                mrvRoadMap.fitBounds(bounds, {{ padding: 60, maxZoom: 12 }});
+            }}
+        }}
+
+        // Sea route map for MRV
+        let mrvSeaMap = null;
+        let mrvSeaMarkers = [];
+
+        function updateMrvSeaMap() {{
+            const originLat = parseFloat(document.getElementById('sea-origin-mrv-lat').value);
+            const originLon = parseFloat(document.getElementById('sea-origin-mrv-lon').value);
+            const destLat = parseFloat(document.getElementById('sea-dest-mrv-lat').value);
+            const destLon = parseFloat(document.getElementById('sea-dest-mrv-lon').value);
+
+            const mapDiv = document.getElementById('mrv-sea-map');
+            const placeholder = document.getElementById('mrv-sea-map-placeholder');
+
+            if (isNaN(originLat) && isNaN(destLat)) {{
+                mapDiv.style.display = 'none';
+                placeholder.style.display = 'flex';
+                return;
+            }}
+
+            mapDiv.style.display = 'block';
+            placeholder.style.display = 'none';
+
+            if (!mrvSeaMap) {{
+                mrvSeaMap = new mapboxgl.Map({{
+                    container: 'mrv-sea-map',
+                    style: 'mapbox://styles/mapbox/light-v11',
+                    center: [0, 30],
+                    zoom: 2
+                }});
+                mrvSeaMap.addControl(new mapboxgl.NavigationControl());
+            }}
+
+            // Clear old markers
+            mrvSeaMarkers.forEach(m => m.remove());
+            mrvSeaMarkers = [];
+
+            const bounds = new mapboxgl.LngLatBounds();
+            let hasPoints = false;
+
+            if (!isNaN(originLat) && !isNaN(originLon)) {{
+                const marker = new mapboxgl.Marker({{ color: '#22c55e' }})
+                    .setLngLat([originLon, originLat])
+                    .setPopup(new mapboxgl.Popup().setHTML('<div class="marker-label">Origin</div><div class="marker-coords">' + originLat.toFixed(4) + ', ' + originLon.toFixed(4) + '</div>'))
+                    .addTo(mrvSeaMap);
+                mrvSeaMarkers.push(marker);
+                bounds.extend([originLon, originLat]);
+                hasPoints = true;
+            }}
+
+            if (!isNaN(destLat) && !isNaN(destLon)) {{
+                const marker = new mapboxgl.Marker({{ color: '#ef4444' }})
+                    .setLngLat([destLon, destLat])
+                    .setPopup(new mapboxgl.Popup().setHTML('<div class="marker-label">Destination</div><div class="marker-coords">' + destLat.toFixed(4) + ', ' + destLon.toFixed(4) + '</div>'))
+                    .addTo(mrvSeaMap);
+                mrvSeaMarkers.push(marker);
+                bounds.extend([destLon, destLat]);
+                hasPoints = true;
+            }}
+
+            // Fetch and draw actual sea route
+            if (!isNaN(originLat) && !isNaN(originLon) && !isNaN(destLat) && !isNaN(destLon)) {{
+                // Show loading indicator
+                placeholder.textContent = 'Loading sea route...';
+                placeholder.style.display = 'flex';
+
+                fetch(`/api/route-geometry?origin_lat=${{originLat}}&origin_lon=${{originLon}}&dest_lat=${{destLat}}&dest_lon=${{destLon}}&mode=sea`)
+                    .then(response => response.json())
+                    .then(data => {{
+                        placeholder.style.display = 'none';
+                        if (data.success && data.coordinates && data.coordinates.length > 0) {{
+                            const routeData = {{
+                                'type': 'Feature',
+                                'properties': {{}},
+                                'geometry': {{
+                                    'type': 'LineString',
+                                    'coordinates': data.coordinates
+                                }}
+                            }};
+
+                            // Extend bounds to include route
+                            data.coordinates.forEach(coord => bounds.extend(coord));
+
+                            if (mrvSeaMap.isStyleLoaded()) {{
+                                try {{
+                                    if (mrvSeaMap.getSource('sea-route')) {{
+                                        mrvSeaMap.getSource('sea-route').setData(routeData);
+                                    }} else {{
+                                        mrvSeaMap.addSource('sea-route', {{ 'type': 'geojson', 'data': routeData }});
+                                        mrvSeaMap.addLayer({{
+                                            'id': 'sea-route',
+                                            'type': 'line',
+                                            'source': 'sea-route',
+                                            'layout': {{ 'line-join': 'round', 'line-cap': 'round' }},
+                                            'paint': {{ 'line-color': '#0ea5e9', 'line-width': 3, 'line-opacity': 0.8 }}
+                                        }});
+                                    }}
+                                    mrvSeaMap.fitBounds(bounds, {{ padding: 60, maxZoom: 10 }});
+                                }} catch (e) {{
+                                    console.log('Sea route layer error:', e);
+                                }}
+                            }} else {{
+                                mrvSeaMap.on('load', function() {{
+                                    mrvSeaMap.addSource('sea-route', {{ 'type': 'geojson', 'data': routeData }});
+                                    mrvSeaMap.addLayer({{
+                                        'id': 'sea-route',
+                                        'type': 'line',
+                                        'source': 'sea-route',
+                                        'layout': {{ 'line-join': 'round', 'line-cap': 'round' }},
+                                        'paint': {{ 'line-color': '#0ea5e9', 'line-width': 3, 'line-opacity': 0.8 }}
+                                    }});
+                                    mrvSeaMap.fitBounds(bounds, {{ padding: 60, maxZoom: 10 }});
+                                }});
+                            }}
+                            console.log('Sea route loaded with ' + data.coordinates.length + ' waypoints');
+                            // Show map legend
+                            updateMapLegend('mrv-sea-map', '#0ea5e9', 'Sea Route');
+                        }}
+                    }})
+                    .catch(err => {{
+                        console.error('Sea route fetch error:', err);
+                        placeholder.style.display = 'none';
+                    }});
+            }} else {{
+                // Remove legend if no route
+                removeMapLegend('mrv-sea-map');
+            }}
+
+            if (hasPoints) {{
+                mrvSeaMap.fitBounds(bounds, {{ padding: 60, maxZoom: 12 }});
+            }}
+        }}
+
+        // Initialize address search on page load
+        document.addEventListener('DOMContentLoaded', function() {{
+            initMaps();
+
+            // Road Distance tab
+            initAddressSearch('road-origin', updateRoadMap);
+            initAddressSearch('road-dest', updateRoadMap);
+
+            // MRV Sea transport
+            initAddressSearch('sea-origin-mrv', updateMrvSeaMap);
+            initAddressSearch('sea-dest-mrv', updateMrvSeaMap);
+
+            // MRV Road transport
+            initAddressSearch('road-origin-mrv', updateMrvRoadMap);
+            initAddressSearch('road-dest-mrv', updateMrvRoadMap);
+
+            // Comparison Wizard
+            initWizardAddressSearch('wizard-origin');
+            initWizardAddressSearch('wizard-dest');
+        }});
+
+        // Update the road calculate button check to use the new hidden inputs
+        function updateRoadCalculateButton() {{
+            const originLat = document.getElementById('road-origin-lat').value;
+            const originLon = document.getElementById('road-origin-lon').value;
+            const destLat = document.getElementById('road-dest-lat').value;
+            const destLon = document.getElementById('road-dest-lon').value;
+            const btn = document.getElementById('road-calculate-btn');
+
+            const isValid = originLat && originLon && destLat && destLon &&
+                           !isNaN(parseFloat(originLat)) && !isNaN(parseFloat(originLon)) &&
+                           !isNaN(parseFloat(destLat)) && !isNaN(parseFloat(destLon)) &&
+                           parseFloat(originLat) >= -90 && parseFloat(originLat) <= 90 &&
+                           parseFloat(originLon) >= -180 && parseFloat(originLon) <= 180 &&
+                           parseFloat(destLat) >= -90 && parseFloat(destLat) <= 90 &&
+                           parseFloat(destLon) >= -180 && parseFloat(destLon) <= 180;
+
+            btn.disabled = !isValid;
+        }}
+
+        // ===== COMPARISON WIZARD FUNCTIONALITY =====
+
+        let wizardCurrentStep = 1;
+        let comparisonChart = null;
+        let comparisonMap = null;
+        let comparisonMarkers = [];
+        let wizardPreviewMap = null;
+        let wizardPreviewMarkers = [];
+        let comparisonResults = {{ sea: null, road: null }};
+
+        // Initialize wizard dropdowns when transport options are loaded
+        function initWizardDropdowns() {{
+            if (!transportOptions) return;
+
+            // Populate sea vessel types
+            const vesselTypeSelect = document.getElementById('wizard-vessel-type');
+            if (vesselTypeSelect && transportOptions.sea && transportOptions.sea.vessel_types) {{
+                vesselTypeSelect.innerHTML = '<option value="">-- Select Vessel Type --</option>';
+                transportOptions.sea.vessel_types.forEach(type => {{
+                    const option = document.createElement('option');
+                    option.value = type;
+                    option.textContent = type;
+                    vesselTypeSelect.appendChild(option);
+                }});
+            }}
+
+            // Populate road modes
+            const roadModeSelect = document.getElementById('wizard-road-mode');
+            if (roadModeSelect && transportOptions.road && transportOptions.road.modes) {{
+                roadModeSelect.innerHTML = '<option value="">-- Select Mode --</option>';
+                transportOptions.road.modes.forEach(mode => {{
+                    const option = document.createElement('option');
+                    option.value = mode;
+                    option.textContent = mode;
+                    roadModeSelect.appendChild(option);
+                }});
+            }}
+        }}
+
+        // Sea dropdown cascading logic
+        function updateWizardSeaDropdowns() {{
+            const vesselTypeSelect = document.getElementById('wizard-vessel-type');
+            const vesselSizeSelect = document.getElementById('wizard-vessel-size');
+            const seaFuelSelect = document.getElementById('wizard-sea-fuel');
+
+            if (!vesselTypeSelect || !vesselSizeSelect || !seaFuelSelect) return;
+            if (!transportOptions || !transportOptions.sea) return;
+
+            const selectedVesselType = vesselTypeSelect.value;
+            const selectedSize = vesselSizeSelect.value;
+
+            const matchingSizes = new Set();
+            const matchingFuels = new Set();
+
+            transportOptions.sea.all_factors.forEach(factor => {{
+                if (selectedVesselType && factor.vessel_type !== selectedVesselType) return;
+                matchingSizes.add(factor.size);
+                if (!selectedSize || factor.size === selectedSize) {{
+                    matchingFuels.add(factor.fuel);
+                }}
+            }});
+
+            // Update sizes
+            if (selectedVesselType) {{
+                const sizeValue = vesselSizeSelect.value;
+                vesselSizeSelect.innerHTML = '<option value="">-- Select Size --</option>';
+                Array.from(matchingSizes).sort().forEach(size => {{
+                    const option = document.createElement('option');
+                    option.value = size;
+                    option.textContent = size;
+                    if (size === sizeValue) option.selected = true;
+                    vesselSizeSelect.appendChild(option);
+                }});
+                vesselSizeSelect.disabled = false;
+            }} else {{
+                vesselSizeSelect.innerHTML = '<option value="">-- Select Size --</option>';
+                vesselSizeSelect.disabled = true;
+            }}
+
+            // Update fuels
+            if (selectedVesselType && vesselSizeSelect.value) {{
+                const fuelValue = seaFuelSelect.value;
+                seaFuelSelect.innerHTML = '<option value="">-- Select Fuel --</option>';
+                Array.from(matchingFuels).sort().forEach(fuel => {{
+                    const option = document.createElement('option');
+                    option.value = fuel;
+                    option.textContent = fuel;
+                    if (fuel === fuelValue) option.selected = true;
+                    seaFuelSelect.appendChild(option);
+                }});
+                seaFuelSelect.disabled = false;
+            }} else {{
+                seaFuelSelect.innerHTML = '<option value="">-- Select Fuel --</option>';
+                seaFuelSelect.disabled = true;
+            }}
+        }}
+
+        // Road dropdown cascading logic
+        function updateWizardRoadDropdowns() {{
+            const roadModeSelect = document.getElementById('wizard-road-mode');
+            const roadLoadTypeSelect = document.getElementById('wizard-road-load-type');
+            const roadFuelSelect = document.getElementById('wizard-road-fuel');
+
+            if (!roadModeSelect || !roadLoadTypeSelect || !roadFuelSelect) return;
+            if (!transportOptions || !transportOptions.road) return;
+
+            const selectedRoadMode = roadModeSelect.value;
+            const selectedLoadType = roadLoadTypeSelect.value;
+
+            const matchingLoadTypes = new Set();
+            const matchingFuels = new Set();
+
+            transportOptions.road.all_factors.forEach(factor => {{
+                if (selectedRoadMode && factor.mode !== selectedRoadMode) return;
+                if (factor.load_type) matchingLoadTypes.add(factor.load_type);
+                if (!selectedLoadType || factor.load_type === selectedLoadType) {{
+                    matchingFuels.add(factor.fuel);
+                }}
+            }});
+
+            // Update load types
+            if (selectedRoadMode) {{
+                const loadTypeValue = roadLoadTypeSelect.value;
+                roadLoadTypeSelect.innerHTML = '<option value="">-- Select Load Type --</option>';
+                Array.from(matchingLoadTypes).sort().forEach(loadType => {{
+                    const option = document.createElement('option');
+                    option.value = loadType;
+                    option.textContent = loadType;
+                    if (loadType === loadTypeValue) option.selected = true;
+                    roadLoadTypeSelect.appendChild(option);
+                }});
+                roadLoadTypeSelect.disabled = false;
+            }} else {{
+                roadLoadTypeSelect.innerHTML = '<option value="">-- Select Load Type --</option>';
+                roadLoadTypeSelect.disabled = true;
+            }}
+
+            // Update fuels
+            if (selectedRoadMode && roadLoadTypeSelect.value) {{
+                const fuelValue = roadFuelSelect.value;
+                roadFuelSelect.innerHTML = '<option value="">-- Select Fuel --</option>';
+                Array.from(matchingFuels).sort().forEach(fuel => {{
+                    const option = document.createElement('option');
+                    option.value = fuel;
+                    option.textContent = fuel;
+                    if (fuel === fuelValue) option.selected = true;
+                    roadFuelSelect.appendChild(option);
+                }});
+                roadFuelSelect.disabled = false;
+            }} else {{
+                roadFuelSelect.innerHTML = '<option value="">-- Select Fuel --</option>';
+                roadFuelSelect.disabled = true;
+            }}
+        }}
+
+        // Validate current step and update button states
+        function updateWizardState() {{
+            const nextBtn = document.getElementById('wizard-next-btn');
+            const compareBtn = document.getElementById('wizard-compare-btn');
+
+            let stepValid = false;
+
+            if (wizardCurrentStep === 1) {{
+                // Step 1: Vehicles + Cargo weight
+                const vesselType = document.getElementById('wizard-vessel-type').value;
+                const vesselSize = document.getElementById('wizard-vessel-size').value;
+                const seaFuel = document.getElementById('wizard-sea-fuel').value;
+                const roadMode = document.getElementById('wizard-road-mode').value;
+                const loadType = document.getElementById('wizard-road-load-type').value;
+                const roadFuel = document.getElementById('wizard-road-fuel').value;
+                const cargoWeight = parseFloat(document.getElementById('wizard-cargo-weight').value);
+
+                stepValid = vesselType && vesselSize && seaFuel && roadMode && loadType && roadFuel && cargoWeight > 0;
+            }} else if (wizardCurrentStep === 2) {{
+                // Step 2: Route selection
+                const originLat = document.getElementById('wizard-origin-lat').value;
+                const originLon = document.getElementById('wizard-origin-lon').value;
+                const destLat = document.getElementById('wizard-dest-lat').value;
+                const destLon = document.getElementById('wizard-dest-lon').value;
+
+                stepValid = originLat && originLon && destLat && destLon;
+            }}
+
+            if (nextBtn) nextBtn.disabled = !stepValid;
+            if (compareBtn) compareBtn.disabled = !stepValid;
+        }}
+
+        // Navigate to next step
+        function wizardNextStep() {{
+            if (wizardCurrentStep >= 2) return;
+            wizardCurrentStep++;
+            updateWizardUI();
+        }}
+
+        // Navigate to previous step
+        function wizardPrevStep() {{
+            if (wizardCurrentStep <= 1) return;
+            wizardCurrentStep--;
+            updateWizardUI();
+        }}
+
+        // Update wizard UI based on current step
+        function updateWizardUI() {{
+            // Update step indicators
+            document.querySelectorAll('.wizard-step').forEach((step, index) => {{
+                const stepNum = index + 1;
+                step.classList.remove('active', 'completed');
+                if (stepNum < wizardCurrentStep) {{
+                    step.classList.add('completed');
+                }} else if (stepNum === wizardCurrentStep) {{
+                    step.classList.add('active');
+                }}
+            }});
+
+            // Update step connectors
+            document.querySelectorAll('.wizard-step-connector').forEach((connector, index) => {{
+                connector.classList.toggle('completed', index < wizardCurrentStep - 1);
+            }});
+
+            // Show/hide step content (2 steps now)
+            for (let i = 1; i <= 2; i++) {{
+                const stepEl = document.getElementById(`wizard-step-${{i}}`);
+                if (stepEl) stepEl.style.display = i === wizardCurrentStep ? 'block' : 'none';
+            }}
+
+            // Update navigation buttons
+            const backBtn = document.getElementById('wizard-back-btn');
+            const nextBtn = document.getElementById('wizard-next-btn');
+            const compareBtn = document.getElementById('wizard-compare-btn');
+
+            if (backBtn) backBtn.style.display = wizardCurrentStep > 1 ? 'inline-block' : 'none';
+            if (nextBtn) nextBtn.style.display = wizardCurrentStep < 2 ? 'inline-block' : 'none';
+            if (compareBtn) compareBtn.style.display = wizardCurrentStep === 2 ? 'inline-block' : 'none';
+
+            updateWizardState();
+
+            // Update preview map if on step 2
+            if (wizardCurrentStep === 2) {{
+                updateWizardPreviewMap();
+            }}
+        }}
+
+        // Clear wizard address field
+        function clearWizardAddress(prefix) {{
+            const addressInput = document.getElementById(`${{prefix}}-address`);
+            const latInput = document.getElementById(`${{prefix}}-lat`);
+            const lonInput = document.getElementById(`${{prefix}}-lon`);
+            const coordsDisplay = document.getElementById(`${{prefix}}-coords`);
+            const suggestions = document.getElementById(`${{prefix}}-suggestions`);
+
+            if (addressInput) addressInput.value = '';
+            if (latInput) latInput.value = '';
+            if (lonInput) lonInput.value = '';
+            if (coordsDisplay) {{
+                coordsDisplay.textContent = 'Not selected';
+                coordsDisplay.className = 'coordinates-display';
+            }}
+            if (suggestions) suggestions.style.display = 'none';
+
+            updateWizardState();
+            updateWizardPreviewMap();
+        }}
+
+        // Preview map for route selection step
+        function updateWizardPreviewMap() {{
+            const originLat = parseFloat(document.getElementById('wizard-origin-lat').value);
+            const originLon = parseFloat(document.getElementById('wizard-origin-lon').value);
+            const destLat = parseFloat(document.getElementById('wizard-dest-lat').value);
+            const destLon = parseFloat(document.getElementById('wizard-dest-lon').value);
+
+            const mapDiv = document.getElementById('wizard-preview-map');
+            const placeholder = document.getElementById('wizard-preview-map-placeholder');
+            const container = document.getElementById('wizard-preview-map-container');
+
+            if (isNaN(originLat) && isNaN(destLat)) {{
+                if (mapDiv) mapDiv.style.display = 'none';
+                if (placeholder) placeholder.style.display = 'flex';
+                return;
+            }}
+
+            if (mapDiv) mapDiv.style.display = 'block';
+            if (placeholder) placeholder.style.display = 'none';
+
+            if (!wizardPreviewMap) {{
+                wizardPreviewMap = new mapboxgl.Map({{
+                    container: 'wizard-preview-map',
+                    style: 'mapbox://styles/mapbox/light-v11',
+                    center: [0, 30],
+                    zoom: 2
+                }});
+                wizardPreviewMap.addControl(new mapboxgl.NavigationControl());
+            }}
+
+            // Clear old markers
+            wizardPreviewMarkers.forEach(m => m.remove());
+            wizardPreviewMarkers = [];
+
+            // Clear old routes
+            if (wizardPreviewMap.isStyleLoaded()) {{
+                ['preview-sea-route', 'preview-road-route'].forEach(id => {{
+                    if (wizardPreviewMap.getLayer(id)) wizardPreviewMap.removeLayer(id);
+                    if (wizardPreviewMap.getSource(id)) wizardPreviewMap.removeSource(id);
+                }});
+            }}
+
+            // Clear old legend
+            const existingLegend = container.querySelector('.wizard-preview-legend');
+            if (existingLegend) existingLegend.remove();
+
+            const bounds = new mapboxgl.LngLatBounds();
+            let hasPoints = false;
+
+            if (!isNaN(originLat) && !isNaN(originLon)) {{
+                const marker = new mapboxgl.Marker({{ color: '#22c55e' }})
+                    .setLngLat([originLon, originLat])
+                    .setPopup(new mapboxgl.Popup().setHTML('<div class="marker-label">Origin</div>'))
+                    .addTo(wizardPreviewMap);
+                wizardPreviewMarkers.push(marker);
+                bounds.extend([originLon, originLat]);
+                hasPoints = true;
+            }}
+
+            if (!isNaN(destLat) && !isNaN(destLon)) {{
+                const marker = new mapboxgl.Marker({{ color: '#ef4444' }})
+                    .setLngLat([destLon, destLat])
+                    .setPopup(new mapboxgl.Popup().setHTML('<div class="marker-label">Destination</div>'))
+                    .addTo(wizardPreviewMap);
+                wizardPreviewMarkers.push(marker);
+                bounds.extend([destLon, destLat]);
+                hasPoints = true;
+            }}
+
+            // If both points selected, fetch and show routes
+            if (!isNaN(originLat) && !isNaN(originLon) && !isNaN(destLat) && !isNaN(destLon)) {{
+                // Show loading state
+                placeholder.textContent = 'Loading route previews...';
+                placeholder.style.display = 'flex';
+
+                // Fetch both routes in parallel
+                Promise.all([
+                    fetch(`/api/route-geometry?origin_lat=${{originLat}}&origin_lon=${{originLon}}&dest_lat=${{destLat}}&dest_lon=${{destLon}}&mode=sea`),
+                    fetch(`/api/route-geometry?origin_lat=${{originLat}}&origin_lon=${{originLon}}&dest_lat=${{destLat}}&dest_lon=${{destLon}}&mode=road`)
+                ])
+                .then(([seaRes, roadRes]) => Promise.all([seaRes.json(), roadRes.json()]))
+                .then(([seaData, roadData]) => {{
+                    placeholder.style.display = 'none';
+
+                    // Wait for map style to load
+                    const addRoutes = () => {{
+                        // Remove existing route layers/sources
+                        ['preview-sea-route', 'preview-road-route'].forEach(id => {{
+                            if (wizardPreviewMap.getLayer(id)) wizardPreviewMap.removeLayer(id);
+                            if (wizardPreviewMap.getSource(id)) wizardPreviewMap.removeSource(id);
+                        }});
+
+                        // Add sea route (blue)
+                        if (seaData.success && seaData.coordinates && seaData.coordinates.length > 0) {{
+                            wizardPreviewMap.addSource('preview-sea-route', {{
+                                'type': 'geojson',
+                                'data': {{
+                                    'type': 'Feature',
+                                    'properties': {{}},
+                                    'geometry': {{ 'type': 'LineString', 'coordinates': seaData.coordinates }}
+                                }}
+                            }});
+                            wizardPreviewMap.addLayer({{
+                                'id': 'preview-sea-route',
+                                'type': 'line',
+                                'source': 'preview-sea-route',
+                                'layout': {{ 'line-join': 'round', 'line-cap': 'round' }},
+                                'paint': {{ 'line-color': '#0ea5e9', 'line-width': 4, 'line-opacity': 0.8 }}
+                            }});
+                            seaData.coordinates.forEach(coord => bounds.extend(coord));
+                        }}
+
+                        // Add road route (orange)
+                        if (roadData.success && roadData.coordinates && roadData.coordinates.length > 0) {{
+                            wizardPreviewMap.addSource('preview-road-route', {{
+                                'type': 'geojson',
+                                'data': {{
+                                    'type': 'Feature',
+                                    'properties': {{}},
+                                    'geometry': {{ 'type': 'LineString', 'coordinates': roadData.coordinates }}
+                                }}
+                            }});
+                            wizardPreviewMap.addLayer({{
+                                'id': 'preview-road-route',
+                                'type': 'line',
+                                'source': 'preview-road-route',
+                                'layout': {{ 'line-join': 'round', 'line-cap': 'round' }},
+                                'paint': {{ 'line-color': '#f97316', 'line-width': 4, 'line-opacity': 0.8 }}
+                            }});
+                            roadData.coordinates.forEach(coord => bounds.extend(coord));
+                        }}
+
+                        // Fit bounds to show both routes
+                        wizardPreviewMap.fitBounds(bounds, {{ padding: 50, maxZoom: 8 }});
+
+                        // Add legend
+                        updateWizardPreviewLegend(seaData, roadData);
+                    }};
+
+                    if (wizardPreviewMap.isStyleLoaded()) {{
+                        addRoutes();
+                    }} else {{
+                        wizardPreviewMap.on('load', addRoutes);
+                    }}
+                }})
+                .catch(err => {{
+                    console.error('Route preview error:', err);
+                    placeholder.style.display = 'none';
+                    if (hasPoints) {{
+                        wizardPreviewMap.fitBounds(bounds, {{ padding: 60, maxZoom: 10 }});
+                    }}
+                }});
+            }} else if (hasPoints) {{
+                wizardPreviewMap.fitBounds(bounds, {{ padding: 60, maxZoom: 10 }});
+            }}
+        }}
+
+        function updateWizardPreviewLegend(seaData, roadData) {{
+            const container = document.getElementById('wizard-preview-map-container');
+            if (!container) return;
+
+            // Remove existing legend
+            const existingLegend = container.querySelector('.wizard-preview-legend');
+            if (existingLegend) existingLegend.remove();
+
+            const seaDistance = seaData.distance_km ? `${{seaData.distance_km.toFixed(0)}} km` : 'N/A';
+            const roadDistance = roadData.distance_km ? `${{roadData.distance_km.toFixed(0)}} km` : 'N/A';
+
+            const legend = document.createElement('div');
+            legend.className = 'wizard-preview-legend';
+            legend.style.cssText = 'position:absolute;bottom:1rem;left:1rem;background:rgba(255,255,255,0.95);padding:0.75rem 1rem;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:10;font-size:0.85rem;';
+            legend.innerHTML = `
+                <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">
+                    <div style="width:20px;height:4px;background:#0ea5e9;border-radius:2px;"></div>
+                    <span><strong>Sea:</strong> ${{seaDistance}}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:0.5rem;">
+                    <div style="width:20px;height:4px;background:#f97316;border-radius:2px;"></div>
+                    <span><strong>Road:</strong> ${{roadDistance}}</span>
+                </div>
+            `;
+            container.appendChild(legend);
+        }}
+
+        // Run the comparison - make dual API calls
+        async function runComparison() {{
+            const compareBtn = document.getElementById('wizard-compare-btn');
+            compareBtn.disabled = true;
+            compareBtn.textContent = 'CALCULATING...';
+
+            const vesselType = document.getElementById('wizard-vessel-type').value;
+            const vesselSize = document.getElementById('wizard-vessel-size').value;
+            const seaFuel = document.getElementById('wizard-sea-fuel').value;
+            const roadMode = document.getElementById('wizard-road-mode').value;
+            const loadType = document.getElementById('wizard-road-load-type').value;
+            const roadFuel = document.getElementById('wizard-road-fuel').value;
+            const originLat = document.getElementById('wizard-origin-lat').value;
+            const originLon = document.getElementById('wizard-origin-lon').value;
+            const destLat = document.getElementById('wizard-dest-lat').value;
+            const destLon = document.getElementById('wizard-dest-lon').value;
+            const cargoWeight = document.getElementById('wizard-cargo-weight').value;
+
+            try {{
+                // Make parallel API calls for sea and road
+                const [seaResponse, roadResponse, seaRouteResponse, roadRouteResponse] = await Promise.all([
+                    fetch(`/api/mrv?transport_mode=sea&cargo_weight=${{cargoWeight}}&origin_lat=${{originLat}}&origin_lon=${{originLon}}&dest_lat=${{destLat}}&dest_lon=${{destLon}}&vessel_type=${{encodeURIComponent(vesselType)}}&size=${{encodeURIComponent(vesselSize)}}&fuel=${{encodeURIComponent(seaFuel)}}`),
+                    fetch(`/api/mrv?transport_mode=road&cargo_weight=${{cargoWeight}}&origin_lat=${{originLat}}&origin_lon=${{originLon}}&dest_lat=${{destLat}}&dest_lon=${{destLon}}&road_mode=${{encodeURIComponent(roadMode)}}&load_type=${{encodeURIComponent(loadType)}}&fuel=${{encodeURIComponent(roadFuel)}}`),
+                    fetch(`/api/route-geometry?origin_lat=${{originLat}}&origin_lon=${{originLon}}&dest_lat=${{destLat}}&dest_lon=${{destLon}}&mode=sea`),
+                    fetch(`/api/route-geometry?origin_lat=${{originLat}}&origin_lon=${{originLon}}&dest_lat=${{destLat}}&dest_lon=${{destLon}}&mode=road`)
+                ]);
+
+                const seaData = await seaResponse.json();
+                const roadData = await roadResponse.json();
+                const seaRouteData = await seaRouteResponse.json();
+                const roadRouteData = await roadRouteResponse.json();
+
+                if (seaData.error || roadData.error) {{
+                    throw new Error(seaData.error || roadData.error);
+                }}
+
+                comparisonResults = {{
+                    sea: {{ ...seaData, route: seaRouteData }},
+                    road: {{ ...roadData, route: roadRouteData }}
+                }};
+
+                displayComparisonResults();
+
+            }} catch (error) {{
+                console.error('Comparison error:', error);
+                alert('Error running comparison: ' + error.message);
+            }} finally {{
+                compareBtn.disabled = false;
+                compareBtn.textContent = 'RUN COMPARISON';
+            }}
+        }}
+
+        // Display comparison results
+        function displayComparisonResults() {{
+            // Show results section, hide wizard
+            document.getElementById('comparison-results').style.display = 'block';
+            document.getElementById('comparison-wizard').style.display = 'none';
+
+            const sea = comparisonResults.sea;
+            const road = comparisonResults.road;
+
+            // Update CO2 metrics
+            document.getElementById('sea-co2-value').textContent = sea.emissions.co2_tonnes.toFixed(2);
+            document.getElementById('road-co2-value').textContent = road.emissions.co2_tonnes.toFixed(2);
+            document.getElementById('sea-distance-detail').textContent = `${{sea.distance.distance_km.toFixed(1)}} km`;
+            document.getElementById('road-distance-detail').textContent = `${{road.distance.distance_km.toFixed(1)}} km`;
+
+            // Calculate difference
+            const diff = Math.abs(sea.emissions.co2_tonnes - road.emissions.co2_tonnes);
+            const diffPercent = ((diff / Math.max(sea.emissions.co2_tonnes, road.emissions.co2_tonnes)) * 100).toFixed(1);
+            const betterOption = sea.emissions.co2_tonnes < road.emissions.co2_tonnes ? 'Sea' : 'Road';
+
+            document.getElementById('co2-savings-value').textContent = diff.toFixed(2);
+            document.getElementById('co2-savings-percent').textContent = `${{diffPercent}}% lower with ${{betterOption}}`;
+
+            // Update map with both routes
+            updateComparisonMap();
+
+            // Update chart
+            updateComparisonChart();
+
+            // Generate insights
+            generateInsights();
+
+            // Scroll to results
+            document.getElementById('comparison-results').scrollIntoView({{ behavior: 'smooth' }});
+        }}
+
+        // Update comparison map with both routes
+        function updateComparisonMap() {{
+            const mapDiv = document.getElementById('comparison-map');
+            const placeholder = document.getElementById('comparison-map-placeholder');
+
+            if (mapDiv) mapDiv.style.display = 'block';
+            if (placeholder) placeholder.style.display = 'none';
+
+            if (!comparisonMap) {{
+                comparisonMap = new mapboxgl.Map({{
+                    container: 'comparison-map',
+                    style: 'mapbox://styles/mapbox/light-v11',
+                    center: [0, 30],
+                    zoom: 2
+                }});
+                comparisonMap.addControl(new mapboxgl.NavigationControl());
+            }}
+
+            // Clear old markers
+            comparisonMarkers.forEach(m => m.remove());
+            comparisonMarkers = [];
+
+            const bounds = new mapboxgl.LngLatBounds();
+
+            // Add origin marker
+            const originLat = parseFloat(document.getElementById('wizard-origin-lat').value);
+            const originLon = parseFloat(document.getElementById('wizard-origin-lon').value);
+            const destLat = parseFloat(document.getElementById('wizard-dest-lat').value);
+            const destLon = parseFloat(document.getElementById('wizard-dest-lon').value);
+
+            const originMarker = new mapboxgl.Marker({{ color: '#22c55e' }})
+                .setLngLat([originLon, originLat])
+                .setPopup(new mapboxgl.Popup().setHTML('<div class="marker-label">Origin</div>'))
+                .addTo(comparisonMap);
+            comparisonMarkers.push(originMarker);
+            bounds.extend([originLon, originLat]);
+
+            const destMarker = new mapboxgl.Marker({{ color: '#ef4444' }})
+                .setLngLat([destLon, destLat])
+                .setPopup(new mapboxgl.Popup().setHTML('<div class="marker-label">Destination</div>'))
+                .addTo(comparisonMap);
+            comparisonMarkers.push(destMarker);
+            bounds.extend([destLon, destLat]);
+
+            // Add both routes when map is ready
+            const addRoutes = () => {{
+                // Sea route (blue)
+                if (comparisonResults.sea.route && comparisonResults.sea.route.coordinates && comparisonResults.sea.route.coordinates.length > 0) {{
+                    const seaRouteData = {{
+                        'type': 'Feature',
+                        'properties': {{}},
+                        'geometry': {{
+                            'type': 'LineString',
+                            'coordinates': comparisonResults.sea.route.coordinates
+                        }}
+                    }};
+
+                    try {{
+                        if (comparisonMap.getSource('comparison-sea-route')) {{
+                            comparisonMap.getSource('comparison-sea-route').setData(seaRouteData);
+                        }} else {{
+                            comparisonMap.addSource('comparison-sea-route', {{ 'type': 'geojson', 'data': seaRouteData }});
+                            comparisonMap.addLayer({{
+                                'id': 'comparison-sea-route',
+                                'type': 'line',
+                                'source': 'comparison-sea-route',
+                                'layout': {{ 'line-join': 'round', 'line-cap': 'round' }},
+                                'paint': {{ 'line-color': '#0ea5e9', 'line-width': 4, 'line-opacity': 0.8 }}
+                            }});
+                        }}
+                        comparisonResults.sea.route.coordinates.forEach(coord => bounds.extend(coord));
+                    }} catch (e) {{
+                        console.log('Sea route layer error:', e);
+                    }}
+                }}
+
+                // Road route (orange)
+                if (comparisonResults.road.route && comparisonResults.road.route.coordinates && comparisonResults.road.route.coordinates.length > 0) {{
+                    const roadRouteData = {{
+                        'type': 'Feature',
+                        'properties': {{}},
+                        'geometry': {{
+                            'type': 'LineString',
+                            'coordinates': comparisonResults.road.route.coordinates
+                        }}
+                    }};
+
+                    try {{
+                        if (comparisonMap.getSource('comparison-road-route')) {{
+                            comparisonMap.getSource('comparison-road-route').setData(roadRouteData);
+                        }} else {{
+                            comparisonMap.addSource('comparison-road-route', {{ 'type': 'geojson', 'data': roadRouteData }});
+                            comparisonMap.addLayer({{
+                                'id': 'comparison-road-route',
+                                'type': 'line',
+                                'source': 'comparison-road-route',
+                                'layout': {{ 'line-join': 'round', 'line-cap': 'round' }},
+                                'paint': {{ 'line-color': '#f97316', 'line-width': 4, 'line-opacity': 0.8 }}
+                            }});
+                        }}
+                        comparisonResults.road.route.coordinates.forEach(coord => bounds.extend(coord));
+                    }} catch (e) {{
+                        console.log('Road route layer error:', e);
+                    }}
+                }}
+
+                comparisonMap.fitBounds(bounds, {{ padding: 60, maxZoom: 10 }});
+                updateComparisonMapLegend();
+            }};
+
+            if (comparisonMap.isStyleLoaded()) {{
+                addRoutes();
+            }} else {{
+                comparisonMap.on('load', addRoutes);
+            }}
+        }}
+
+        // Update comparison map legend
+        function updateComparisonMapLegend() {{
+            const container = document.getElementById('comparison-map-container');
+            if (!container) return;
+
+            const existingLegend = container.querySelector('.comparison-map-legend');
+            if (existingLegend) existingLegend.remove();
+
+            const legend = document.createElement('div');
+            legend.className = 'comparison-map-legend';
+            legend.innerHTML = `
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:#22c55e"></div>
+                    <span>Origin</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:#ef4444"></div>
+                    <span>Destination</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-line" style="background:#0ea5e9"></div>
+                    <span>Sea Route</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-line" style="background:#f97316"></div>
+                    <span>Road Route</span>
+                </div>
+            `;
+            container.appendChild(legend);
+        }}
+
+        // Update comparison chart with Chart.js - Modern design
+        function updateComparisonChart() {{
+            const ctx = document.getElementById('comparison-chart');
+            if (!ctx) return;
+
+            // Destroy existing chart if any
+            if (comparisonChart) {{
+                comparisonChart.destroy();
+            }}
+
+            const years = Object.keys(comparisonResults.sea.ets_costs).sort();
+            const seaCosts = years.map(year => comparisonResults.sea.ets_costs[year].cost_eur);
+            const roadCosts = years.map(year => comparisonResults.road.ets_costs[year].cost_eur);
+
+            // Create gradient fills
+            const chartCtx = ctx.getContext('2d');
+
+            const seaGradient = chartCtx.createLinearGradient(0, 0, 0, 350);
+            seaGradient.addColorStop(0, 'rgba(14, 165, 233, 0.35)');
+            seaGradient.addColorStop(0.5, 'rgba(14, 165, 233, 0.1)');
+            seaGradient.addColorStop(1, 'rgba(14, 165, 233, 0)');
+
+            const roadGradient = chartCtx.createLinearGradient(0, 0, 0, 350);
+            roadGradient.addColorStop(0, 'rgba(249, 115, 22, 0.35)');
+            roadGradient.addColorStop(0.5, 'rgba(249, 115, 22, 0.1)');
+            roadGradient.addColorStop(1, 'rgba(249, 115, 22, 0)');
+
+            comparisonChart = new Chart(ctx, {{
+                type: 'line',
+                data: {{
+                    labels: years,
+                    datasets: [
+                        {{
+                            label: 'Sea Transport',
+                            data: seaCosts,
+                            borderColor: '#0ea5e9',
+                            backgroundColor: seaGradient,
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 6,
+                            pointHoverRadius: 10,
+                            pointBackgroundColor: '#ffffff',
+                            pointBorderColor: '#0ea5e9',
+                            pointBorderWidth: 3,
+                            pointHoverBackgroundColor: '#0ea5e9',
+                            pointHoverBorderColor: '#ffffff',
+                            pointHoverBorderWidth: 3
+                        }},
+                        {{
+                            label: 'Road Transport',
+                            data: roadCosts,
+                            borderColor: '#f97316',
+                            backgroundColor: roadGradient,
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 6,
+                            pointHoverRadius: 10,
+                            pointBackgroundColor: '#ffffff',
+                            pointBorderColor: '#f97316',
+                            pointBorderWidth: 3,
+                            pointHoverBackgroundColor: '#f97316',
+                            pointHoverBorderColor: '#ffffff',
+                            pointHoverBorderWidth: 3
+                        }}
+                    ]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {{
+                        mode: 'index',
+                        intersect: false
+                    }},
+                    plugins: {{
+                        legend: {{
+                            position: 'top',
+                            align: 'center',
+                            labels: {{
+                                usePointStyle: true,
+                                pointStyle: 'circle',
+                                padding: 25,
+                                font: {{
+                                    size: 13,
+                                    weight: '600',
+                                    family: "'Inter', 'Segoe UI', sans-serif"
+                                }}
+                            }}
+                        }},
+                        tooltip: {{
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            titleFont: {{
+                                size: 14,
+                                weight: '600',
+                                family: "'Inter', 'Segoe UI', sans-serif"
+                            }},
+                            bodyFont: {{
+                                size: 13,
+                                family: "'Inter', 'Segoe UI', sans-serif"
+                            }},
+                            padding: 16,
+                            cornerRadius: 12,
+                            displayColors: true,
+                            boxPadding: 8,
+                            callbacks: {{
+                                title: function(context) {{
+                                    return 'Year ' + context[0].label;
+                                }},
+                                label: function(context) {{
+                                    const value = context.raw;
+                                    return ' ' + context.dataset.label + ': €' + value.toLocaleString(undefined, {{minimumFractionDigits: 2, maximumFractionDigits: 2}});
+                                }}
+                            }}
+                        }}
+                    }},
+                    scales: {{
+                        y: {{
+                            beginAtZero: true,
+                            border: {{
+                                display: false
+                            }},
+                            grid: {{
+                                color: 'rgba(148, 163, 184, 0.12)',
+                                drawTicks: false
+                            }},
+                            ticks: {{
+                                padding: 16,
+                                font: {{
+                                    size: 12,
+                                    weight: '500',
+                                    family: "'Inter', 'Segoe UI', sans-serif"
+                                }},
+                                color: '#64748b',
+                                callback: function(value) {{
+                                    return '€' + value.toLocaleString();
+                                }}
+                            }}
+                        }},
+                        x: {{
+                            border: {{
+                                display: false
+                            }},
+                            grid: {{
+                                display: false
+                            }},
+                            ticks: {{
+                                padding: 12,
+                                font: {{
+                                    size: 13,
+                                    weight: '600',
+                                    family: "'Inter', 'Segoe UI', sans-serif"
+                                }},
+                                color: '#334155'
+                            }}
+                        }}
+                    }},
+                    animation: {{
+                        duration: 1200,
+                        easing: 'easeOutQuart'
+                    }}
+                }}
+            }});
+        }}
+
+        // Generate analysis insights
+        function generateInsights() {{
+            const insightsContainer = document.getElementById('comparison-insights');
+            if (!insightsContainer) return;
+
+            const sea = comparisonResults.sea;
+            const road = comparisonResults.road;
+
+            let insights = [];
+
+            // CO2 comparison insight
+            const co2Diff = sea.emissions.co2_tonnes - road.emissions.co2_tonnes;
+            if (co2Diff < 0) {{
+                insights.push({{
+                    type: 'positive',
+                    label: 'CO2',
+                    title: 'Sea transport is more environmentally friendly',
+                    description: `Sea transport produces ${{Math.abs(co2Diff).toFixed(2)}} tonnes less CO2 than road transport for this route.`
+                }});
+            }} else if (co2Diff > 0) {{
+                insights.push({{
+                    type: 'positive',
+                    label: 'CO2',
+                    title: 'Road transport is more environmentally friendly',
+                    description: `Road transport produces ${{Math.abs(co2Diff).toFixed(2)}} tonnes less CO2 than sea transport for this route.`
+                }});
+            }}
+
+            // Distance comparison
+            const distDiff = sea.distance.distance_km - road.distance.distance_km;
+            insights.push({{
+                type: 'neutral',
+                label: 'DIST',
+                title: 'Route distance comparison',
+                description: `Sea route: ${{sea.distance.distance_km.toFixed(1)}} km | Road route: ${{road.distance.distance_km.toFixed(1)}} km (${{Math.abs(distDiff).toFixed(1)}} km ${{distDiff > 0 ? 'longer by sea' : 'longer by road'}})`
+            }});
+
+            // ETS Coverage insight
+            insights.push({{
+                type: 'neutral',
+                label: 'ETS',
+                title: 'ETS Coverage',
+                description: `Sea: ${{sea.ets_coverage.description}} | Road: ${{road.ets_coverage.description}}`
+            }});
+
+            // Cost projection insight (2030)
+            const seaCost2030 = sea.ets_costs['2030'] ? sea.ets_costs['2030'].cost_eur : 0;
+            const roadCost2030 = road.ets_costs['2030'] ? road.ets_costs['2030'].cost_eur : 0;
+            const costDiff = seaCost2030 - roadCost2030;
+            const betterOption = costDiff < 0 ? 'Sea' : 'Road';
+
+            insights.push({{
+                type: costDiff !== 0 ? 'positive' : 'neutral',
+                label: 'COST',
+                title: `${{betterOption}} transport is more cost-effective by 2030`,
+                description: `Projected 2030 ETS costs: Sea €${{seaCost2030.toLocaleString(undefined, {{minimumFractionDigits: 2}})}} | Road €${{roadCost2030.toLocaleString(undefined, {{minimumFractionDigits: 2}})}} - Savings of €${{Math.abs(costDiff).toLocaleString(undefined, {{minimumFractionDigits: 2}})}} with ${{betterOption.toLowerCase()}} transport.`
+            }});
+
+            // Render insights
+            insightsContainer.innerHTML = insights.map(insight => `
+                <div class="insight-item ${{insight.type}}">
+                    <span class="insight-label">${{insight.label}}</span>
+                    <div class="insight-text">
+                        <div class="insight-title">${{insight.title}}</div>
+                        <div class="insight-description">${{insight.description}}</div>
+                    </div>
+                </div>
+            `).join('');
+        }}
+
+        // Reset wizard to start new comparison
+        function resetWizard() {{
+            // Reset form fields
+            document.getElementById('wizard-vessel-type').value = '';
+            document.getElementById('wizard-vessel-size').value = '';
+            document.getElementById('wizard-vessel-size').disabled = true;
+            document.getElementById('wizard-sea-fuel').value = '';
+            document.getElementById('wizard-sea-fuel').disabled = true;
+            document.getElementById('wizard-road-mode').value = '';
+            document.getElementById('wizard-road-load-type').value = '';
+            document.getElementById('wizard-road-load-type').disabled = true;
+            document.getElementById('wizard-road-fuel').value = '';
+            document.getElementById('wizard-road-fuel').disabled = true;
+            document.getElementById('wizard-cargo-weight').value = '';
+
+            // Clear address fields
+            clearWizardAddress('wizard-origin');
+            clearWizardAddress('wizard-dest');
+
+            // Reset wizard state
+            wizardCurrentStep = 1;
+            updateWizardUI();
+
+            // Hide results, show wizard
+            document.getElementById('comparison-results').style.display = 'none';
+            document.getElementById('comparison-wizard').style.display = 'block';
+
+            // Scroll to wizard
+            document.getElementById('comparison-wizard').scrollIntoView({{ behavior: 'smooth' }});
+        }}
+
+        // Initialize wizard address search
+        function initWizardAddressSearch(prefix) {{
+            const input = document.getElementById(`${{prefix}}-address`);
+            const suggestions = document.getElementById(`${{prefix}}-suggestions`);
+            const spinner = document.getElementById(`${{prefix}}-spinner`);
+
+            if (!input || !suggestions) return;
+
+            let searchTimeout = null;
+
+            input.addEventListener('input', function() {{
+                const query = this.value.trim();
+
+                if (searchTimeout) clearTimeout(searchTimeout);
+
+                if (query.length < 2) {{
+                    suggestions.style.display = 'none';
+                    return;
+                }}
+
+                searchTimeout = setTimeout(async () => {{
+                    if (spinner) spinner.style.display = 'block';
+
+                    try {{
+                        const response = await fetch(`/api/geocode?q=${{encodeURIComponent(query)}}&mode=search`);
+                        const data = await response.json();
+
+                        if (data.success && data.data && data.data.length > 0) {{
+                            suggestions.innerHTML = data.data.map((result, index) => `
+                                <div class="address-suggestion" data-index="${{index}}" data-lat="${{result.coordinates.lat}}" data-lon="${{result.coordinates.lng}}" data-text="${{result.placeName}}">
+                                    <strong>${{result.text}}</strong>
+                                    <span class="suggestion-context">${{result.context || ''}}</span>
+                                </div>
+                            `).join('');
+                            suggestions.style.display = 'block';
+
+                            // Add click handlers
+                            suggestions.querySelectorAll('.address-suggestion').forEach(el => {{
+                                el.addEventListener('click', function() {{
+                                    selectWizardAddress(prefix, {{
+                                        text: this.dataset.text,
+                                        coordinates: {{
+                                            lat: parseFloat(this.dataset.lat),
+                                            lng: parseFloat(this.dataset.lon)
+                                        }}
+                                    }});
+                                }});
+                            }});
+                        }} else {{
+                            suggestions.style.display = 'none';
+                        }}
+                    }} catch (error) {{
+                        console.error('Geocode error:', error);
+                    }} finally {{
+                        if (spinner) spinner.style.display = 'none';
+                    }}
+                }}, 300);
+            }});
+
+            // Hide suggestions on click outside
+            document.addEventListener('click', function(e) {{
+                if (!input.contains(e.target) && !suggestions.contains(e.target)) {{
+                    suggestions.style.display = 'none';
+                }}
+            }});
+        }}
+
+        // Select wizard address
+        function selectWizardAddress(prefix, result) {{
+            const addressInput = document.getElementById(`${{prefix}}-address`);
+            const latInput = document.getElementById(`${{prefix}}-lat`);
+            const lonInput = document.getElementById(`${{prefix}}-lon`);
+            const coordsDisplay = document.getElementById(`${{prefix}}-coords`);
+            const suggestions = document.getElementById(`${{prefix}}-suggestions`);
+
+            if (addressInput) addressInput.value = result.text;
+            if (latInput) latInput.value = result.coordinates.lat;
+            if (lonInput) lonInput.value = result.coordinates.lng;
+            if (suggestions) suggestions.style.display = 'none';
+
+            if (coordsDisplay) {{
+                coordsDisplay.innerHTML = `
+                    <div class="location-selected">
+                        <svg class="location-selected-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                        <div class="location-selected-content">
+                            <div class="location-selected-title">Location selected</div>
+                            <div class="location-selected-coords">${{result.coordinates.lat.toFixed(6)}}, ${{result.coordinates.lng.toFixed(6)}}</div>
+                        </div>
+                    </div>
+                `;
+                coordsDisplay.classList.remove('coordinates-display');
+            }}
+
+            updateWizardState();
+            updateWizardPreviewMap();
+        }}
     </script>
 </body>
 </html>
@@ -2221,19 +5608,19 @@ def main():
     print("EU ETS COST CALCULATOR - WEB SERVER")
     print("=" * 60)
     print(f"Java SeaRoute Available: {'Yes' if JAVA_AVAILABLE else 'No'}")
-    print(f"Starting server on port {{PORT}}...")
-    print(f"Open your browser and go to: http://localhost:{{PORT}}")
+    print(f"Starting server on port {PORT}...")
+    print(f"Open your browser and go to: http://localhost:{PORT}")
     print("Press Ctrl+C to stop the server")
     print("=" * 60)
     
     try:
         with socketserver.TCPServer(("", PORT), CalculatorHandler) as httpd:
-            print(f"Server running at http://0.0.0.0:{{PORT}}")
+            print(f"Server running at http://0.0.0.0:{PORT}")
             httpd.serve_forever()
     except KeyboardInterrupt:
-        print("\\nServer stopped.")
+        print("\nServer stopped.")
     except Exception as e:
-        print(f"Error starting server: {{e}}")
+        print(f"Error starting server: {e}")
 
 if __name__ == "__main__":
     main()
