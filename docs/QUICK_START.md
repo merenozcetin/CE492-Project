@@ -15,9 +15,14 @@ python app.py
 
 ## Access the Web Interface
 
-Open your browser and go to:
+**Local:**
 ```
 http://localhost:8080
+```
+
+**Production (Live):**
+```
+https://ce492-project-production.up.railway.app/
 ```
 
 ## How to Use
@@ -30,17 +35,28 @@ http://localhost:8080
 
 ## What You'll See
 
+### Maritime Routes
 - **Distance**: In nautical miles and kilometers using Java SeaRoute
 - **Route Complexity**: Number of waypoints in the route
 - **ETS Coverage**: EU ETS coverage percentage
 - **Accurate Routes**: Based on actual maritime shipping lanes
 
-## Example Test
+### Road Routes
+- **Distance**: In kilometers and miles
+- **Duration**: Estimated driving time (hours and minutes)
+- **Route**: Based on actual road networks via OpenRouteService
 
-Try: **Hamburg → Shanghai**
+## Example Tests
+
+### Maritime: Hamburg → Shanghai
 - Java SeaRoute: ~10,920 nm (~20,225 km)
 - Route complexity: 45 waypoints
 - ETS Coverage: 50% (Mixed route)
+
+### Road: Ankara → İzmir
+- Distance: ~520 km (~323 miles)
+- Duration: ~5h 12m
+- Route: Via OpenRouteService driving profile
 
 ## Troubleshooting
 
@@ -57,7 +73,8 @@ Edit `server/app.py`, find `PORT = 8080`, change to another port like `8081`
 ## Requirements
 
 - Python 3.8+
-- Java (for SeaRoute routing)
+- Java (for SeaRoute maritime routing)
+- OpenRouteService library (for road routing)
 - Pandas (for data processing)
 
 ---

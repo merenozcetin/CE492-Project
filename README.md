@@ -1,6 +1,6 @@
-# 🚢 EU ETS Maritime Distance Calculator
+# 🚢 EU ETS Maritime & Road Distance Calculator
 
-A simple web application for calculating maritime distances between ports worldwide using Java SeaRoute for accurate shipping routes.
+A web application for calculating maritime and road distances between ports/locations worldwide. Uses Java SeaRoute for accurate shipping routes and OpenRouteService for road routing.
 
 ## 📁 Project Structure
 
@@ -51,8 +51,14 @@ python app.py
 
 ### Open in Browser
 
+**Local:**
 ```
 http://localhost:8080
+```
+
+**Production:**
+```
+https://ce492-project-production.up.railway.app/
 ```
 
 ## 💻 How to Use
@@ -65,30 +71,55 @@ http://localhost:8080
 
 ## 📊 What You'll See
 
+### Maritime Routes
 - **Distance**: In nautical miles and kilometers
 - **Route Details**: Number of waypoints
 - **ETS Coverage**: EU ETS coverage percentage
 - **Accurate Routes**: Based on actual maritime shipping lanes
 
+### Road Routes
+- **Distance**: In kilometers and miles
+- **Duration**: Estimated driving time
+- **Route**: Based on actual road networks via OpenRouteService
+
 ## 🎯 Features
 
+### Maritime
 - ✅ **13,951 ports worldwide** with search functionality
 - ✅ **Java SeaRoute** for accurate maritime routing
 - ✅ **ETS coverage calculation** (0%, 50%, or 100%)
+- ✅ **Route visualization** on interactive maps
+
+### Road
+- ✅ **OpenRouteService integration** for road distance calculation
+- ✅ **Geocoding support** - search by city/location name
+- ✅ **Driving duration estimates** with hours and minutes
+- ✅ **Road route visualization** on maps
+
+### General
 - ✅ **Beautiful, responsive design**
-- ✅ **Real-time port search** as you type
-- ✅ **No external dependencies** - runs locally
+- ✅ **Real-time search** as you type
+- ✅ **Multi-modal comparison** - compare sea vs road routes
+- ✅ **RESTful API** for programmatic access
 
 ## 🔧 Technical Details
 
-### Distance Calculation
+### Maritime Distance Calculation
 
 The application uses **Java SeaRoute** which provides accurate distances based on actual maritime shipping routes, not straight-line distances.
+
+### Road Distance Calculation
+
+Road distances are calculated using **OpenRouteService**, which provides:
+- Accurate driving distances based on actual road networks
+- Estimated driving duration
+- Route geometry for visualization
 
 ### Requirements
 
 - Python 3.8+
-- Java (for SeaRoute routing)
+- Java (for SeaRoute maritime routing)
+- OpenRouteService Python library (for road routing)
 - Pandas (for data processing)
 
 ### ETS Coverage

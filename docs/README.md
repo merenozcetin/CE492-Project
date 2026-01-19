@@ -1,8 +1,10 @@
-# 📖 EU ETS Maritime Distance Calculator - Technical Documentation
+# 📖 EU ETS Maritime & Road Distance Calculator - Technical Documentation
 
 ## 🎯 Overview
 
-This application calculates maritime distances between ports worldwide using Java SeaRoute, which provides accurate shipping route distances based on actual maritime networks rather than straight-line calculations.
+This application calculates maritime and road distances between ports/locations worldwide using:
+- **Java SeaRoute**: Accurate shipping route distances based on actual maritime networks
+- **OpenRouteService**: Road distance and duration calculation based on real road networks
 
 ## 🏗️ Architecture
 
@@ -13,11 +15,13 @@ User Browser (localhost:8080)
         ↓
 Python Web Server (app.py)
         ↓
-Java SeaRoute Wrapper (tools/java_searoute_wrapper.py)
-        ↓
-Java SeaRoute (searoute.jar)
-        ↓
-Maritime Network Database (marnet/*.gpkg)
+    ┌───────────────────┬────────────────────┐
+    ↓                   ↓                    ↓
+Java SeaRoute       OpenRouteService     Nominatim
+(Maritime Routes)   (Road Routes)        (Geocoding)
+    ↓                   ↓
+Maritime Network    Road Network
+(marnet/*.gpkg)     (ORS Cloud)
 ```
 
 ### Component Overview
@@ -25,8 +29,10 @@ Maritime Network Database (marnet/*.gpkg)
 1. **Web Server** (`server/app.py`): Python HTTP server that handles web requests
 2. **Port Database** (`server/data/ports.json`): 13,951 ports worldwide
 3. **Java SeaRoute Wrapper** (`server/tools/java_searoute_wrapper.py`): Python interface to Java SeaRoute
-4. **Java SeaRoute** (`server/java-searoute/searoute.jar`): Actual routing engine
+4. **Java SeaRoute** (`server/java-searoute/searoute.jar`): Maritime routing engine
 5. **Maritime Network** (`server/marnet/*.gpkg`): Geographic shipping lane database
+6. **OpenRouteService** (`openrouteservice` library): Road routing via ORS API
+7. **Nominatim**: OpenStreetMap geocoding service for location name resolution
 
 ## 📄 Code Structure
 
@@ -337,7 +343,7 @@ GET /api/ports?q=hamburg
 
 ### GET /api/calculate?origin_lat={lat}&origin_lon={lon}&dest_lat={lat}&dest_lon={lon}
 
-Calculate distance between two points.
+Calculate maritime distance between two points.
 
 **Example:**
 ```
@@ -357,6 +363,80 @@ GET /api/calculate?origin_lat=53.5511&origin_lon=9.9937&dest_lat=31.2304&dest_lo
         "route_complexity": 45,
         "success": true
     }
+}
+```
+
+### GET /api/road-distance?origin_lat={lat}&origin_lon={lon}&dest_lat={lat}&dest_lon={lon}
+
+Calculate road distance between two points using OpenRouteService.
+
+**Example:**
+```
+GET /api/road-distance?origin_lat=39.9334&origin_lon=32.8597&dest_lat=38.4192&dest_lon=27.1287
+```
+
+**Response:**
+```json
+{
+    "success": true,
+    "distance_km": 520.45,
+    "distance_miles": 323.41,
+    "distance_meters": 520450,
+    "duration_seconds": 18720,
+    "duration_hours": 5,
+    "duration_minutes": 12,
+    "geometry": "encoded_polyline_string"
+}
+```
+
+**Error Response:**
+```json
+{
+    "success": false,
+    "error": "The coordinates are not near a road. Please ensure your coordinates are within 350 meters of a drivable road."
+}
+```
+
+### GET /api/geocode?q={location_name}
+
+Geocode a location name to coordinates.
+
+**Example:**
+```
+GET /api/geocode?q=Ankara
+```
+
+**Response:**
+```json
+{
+    "success": true,
+    "results": [
+        {
+            "name": "Ankara",
+            "lat": 39.9334,
+            "lon": 32.8597,
+            "display_name": "Ankara, Turkey"
+        }
+    ]
+}
+```
+
+### GET /api/route-geometry?origin_lat={lat}&origin_lon={lon}&dest_lat={lat}&dest_lon={lon}&mode={sea|road}
+
+Get route geometry for map visualization.
+
+**Example:**
+```
+GET /api/route-geometry?origin_lat=39.9334&origin_lon=32.8597&dest_lat=38.4192&dest_lon=27.1287&mode=road
+```
+
+**Response:**
+```json
+{
+    "success": true,
+    "coordinates": [[32.8597, 39.9334], [32.5, 39.8], ...],
+    "distance_km": 520.45,
+    "duration_seconds": 18720
 }
 ```
 
